@@ -204,10 +204,18 @@ test.describe('clinical workspace performance contract', () => {
       trendCloseDurations.push(await clickAndMeasureTwoPaints(closeButton))
       await expect(page.getByTestId('cumulative-trend-detail')).toBeHidden()
     }
+    // Opening or closing a trend re-renders every retained workspace that
+    // reads the right-detail context, so on `next dev` it is one long frame
+    // whose length follows the runner's CPU. With no change to the page the
+    // same commit measures a median open of 283-317 ms on one hosted runner
+    // and 457-573 ms on another, and a close of 52-262 ms or 407-440 ms
+    // (master runs, 2026-11-23 to 11-25; 195 ms and 175 ms on a developer
+    // Mac). The budgets sit about 30% above the slowest of those, which
+    // still fails a page that doubles the cost on an ordinary runner.
     const cumulativeTrendOpenMedianMs = percentile(trendOpenDurations, 0.5)
-    expect(cumulativeTrendOpenMedianMs).toBeLessThan(500)
+    expect(cumulativeTrendOpenMedianMs).toBeLessThan(750)
     const cumulativeTrendCloseMedianMs = percentile(trendCloseDurations, 0.5)
-    expect(cumulativeTrendCloseMedianMs).toBeLessThan(350)
+    expect(cumulativeTrendCloseMedianMs).toBeLessThan(600)
 
     await switchLeftTab(page, '用藥')
     const viewport = await activeLeftViewport(page)
@@ -232,7 +240,9 @@ test.describe('clinical workspace performance contract', () => {
     // Interaction-specific budgets above are the pass/fail signal for
     // sustained user-visible stalls. This page-wide observer also includes
     // framework, chart, Firestore, and shared-runner background scheduling, so
-    // keep its P95 as diagnostic data and apply only a half-second freeze cap.
+    // keep its P95 as diagnostic data and apply only a freeze cap. The cap
+    // follows the same two runner speeds as the trend budgets: the longest
+    // task is 359-477 ms on one and 634-655 ms on the other.
 
     const metrics = {
       loadingTabSwitchMs,
@@ -263,6 +273,6 @@ test.describe('clinical workspace performance contract', () => {
       contentType: 'application/json',
     })
     console.log(`[performance-metrics] ${JSON.stringify(metrics)}`)
-    expect(longestMainThreadTaskMs).toBeLessThan(500)
+    expect(longestMainThreadTaskMs).toBeLessThan(900)
   })
 })
