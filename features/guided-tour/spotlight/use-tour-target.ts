@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import {
   isVisibleTourElement,
   isWithinViewport,
@@ -61,7 +61,11 @@ export function useTourTarget(spec: TourTargetSpec | null, isDesktop = false): T
     return () => window.removeEventListener('resize', update)
   }, [])
 
-  useEffect(() => {
+  // A layout effect, so a step whose target is already on the page gets its
+  // rect in the commit that changes the step. As a passive effect the first
+  // search ran after the browser had painted the step with no rect, and every
+  // step change showed one frame with the highlight gone.
+  useLayoutEffect(() => {
     if (!spec) {
       const resetTimer = window.setTimeout(() => {
         setTargetRect(null)
