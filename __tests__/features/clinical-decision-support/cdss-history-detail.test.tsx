@@ -2,7 +2,8 @@ jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', (
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))
 import React from 'react'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { toast } from 'sonner'
 import { webcrypto } from 'node:crypto'
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
 import { readCdssHistory } from '@/features/clinical-decision-support/telemetry/cdss-history'
@@ -315,4 +316,68 @@ test('deleting the last record of a filtered disease falls back to all records',
   fireEvent.click(await screen.findByTestId('cdss-history-delete'))
   fireEvent.click(await screen.findByTestId('cdss-history-delete-confirm-button'))
   expect(await screen.findByTestId(`cdss-history-row-${other.saveId}`)).toBeVisible()
+})
+
+describe('bringing in the last record on opening', () => {
+  const auto = async (id: string, patch = {}) => {
+    const stored = await detail({ save_id: id, patient_session_id: id, ...patch })
+    const row = { ...index, saveId: id }
+    jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? { ...stored, saveId: id } : { records: [row], hasMore: false }))
+    return { ...stored, saveId: id }
+  }
+  beforeEach(() => sessionStorage.clear())
+
+  test('the newest record of this disease is brought in without a click, and the clinician is told', async () => {
+    const stored = await auto('22222222-2222-4222-8222-222222222222')
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryForward = jest.fn(() => 3)
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(onCarryForward).toHaveBeenCalledWith(stored, { inputs: true, decisions: true }))
+    expect(await screen.findByTestId('cdss-carried-notice')).toHaveTextContent(/已自動帶入/)
+    expect(told).toHaveBeenCalledWith(expect.stringMatching(/已自動帶入.*共 3 項/), expect.objectContaining({ description: expect.stringContaining('請核對') }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // Coming back to the same record does not fill again what the clinician may have cleared.
+    view.unmount()
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(jest.mocked(fetch).mock.calls).toHaveLength(3))
+    expect(onCarryForward).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('cdss-carried-notice')).not.toBeInTheDocument()
+    told.mockRestore()
+  })
+
+  test('nothing is read before the answers are read back, and nothing is announced when nothing was empty', async () => {
+    await auto('33333333-3333-4333-8333-333333333333')
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryForward = jest.fn(() => 0)
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} />)
+    await act(async () => { await Promise.resolve() })
+    expect(fetch).not.toHaveBeenCalled()
+    view.rerender(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(onCarryForward).toHaveBeenCalledTimes(1))
+    expect(told).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('cdss-carried-notice')).not.toBeInTheDocument()
+    told.mockRestore()
+  })
+
+  test('a record of another rules version or another disease is not brought in', async () => {
+    await auto('44444444-4444-4444-8444-444444444444', { result: { ...result, packVersion: 'old' } })
+    const onCarryForward = jest.fn(() => 1)
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(jest.mocked(fetch).mock.calls).toHaveLength(2))
+    view.unmount()
+    jest.mocked(fetch).mockReset()
+    jest.mocked(fetch).mockResolvedValue(response({ records: [{ ...index, packId: 'other' }], hasMore: false }))
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    await act(async () => { await Promise.resolve() })
+    expect(onCarryForward).not.toHaveBeenCalled()
+  })
+
+  test('layouts that do not offer records bring nothing in', async () => {
+    await auto('55555555-5555-4555-8555-555555555555')
+    const onCarryForward = jest.fn(() => 1)
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady offered={false} />)
+    await act(async () => { await Promise.resolve() })
+    expect(fetch).not.toHaveBeenCalled()
+  })
 })

@@ -88,7 +88,7 @@ export function carryableAnswers(patientId: string, now: Date = new Date(), scop
   return answers
 }
 
-/** Explicitly confirmed, fill-only carry-forward. Historical results never enter the live evaluation. */
+/** Fill-only carry-forward, confirmed in the records or brought in on opening and announced. Historical results never enter the live evaluation. */
 export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, packId: string, packVersion: string,
   currentRecordProfile: CdssPatientProfile, choices: CarryForwardChoices): number {
   if (!patientId || record.save.pack_id !== packId || record.save.result.packVersion !== packVersion)
