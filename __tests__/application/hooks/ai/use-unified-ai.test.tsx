@@ -465,6 +465,39 @@ describe('useUnifiedAi collector template', () => {
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })
 
+  it.each([
+    ['a caller that names a reason', 'superseded'], ['a caller that gives none', 'unknown'], ['leaving the page', 'navigation'], ['the summary watchdog', 'timeout'],
+  ] as const)('a cancelled stream reports why it was cancelled: %s → %s', async (_case, sent) => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
+    mockStream.mockImplementationOnce((options: { signal: AbortSignal }) => new Promise<void>((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(Object.assign(new Error('SYNTHETIC-SECRET'), { name: 'AbortError' })), { once: true })
+    }))
+    const watchdog = new AbortController()
+    const { result, unmount } = renderHook(() => useUnifiedAi())
+    try {
+      let pending!: Promise<unknown>
+      act(() => {
+        pending = result.current.stream([{ role: 'user', content: 'SYNTHETIC-PROMPT' }],
+          { modelId: 'gpt-5.4-nano', diagnosticFeature: 'chat', operationKey: 'slot-one', throwOnAbort: true, signal: watchdog.signal }).catch(() => undefined)
+      })
+      await waitFor(() => expect(mockStream).toHaveBeenCalledTimes(1))
+      await act(async () => {
+        if (sent === 'superseded') result.current.stop('slot-one', 'superseded')
+        else if (sent === 'unknown') result.current.stop('slot-one')
+        else if (sent === 'navigation') unmount()
+        else watchdog.abort(Object.assign(new Error('stalled'), { name: 'MedicalSummaryCardProgressTimeoutError' }))
+        await pending
+      })
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+      const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
+      expect(wire).toMatchObject({ schema_version: 12, status: sent === 'timeout' ? 'error' : 'aborted', error_class: sent === 'timeout' ? 'timeout' : 'aborted' })
+      expect(wire.diagnostics.abort_reason).toBe(sent)
+      expect(JSON.stringify(wire)).not.toContain('SYNTHETIC-SECRET')
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
+
   it.each([['stop', 'stop'], ['length', 'length'], ['content-filter', 'content_filter'], ['tool-calls', 'tool_calls'], ['SYNTHETIC-SECRET', 'unreported'], [undefined, undefined]])(
     'a completed stream reports why the model stopped (%s → %s)', async (reported, sent) => {
     const permission = mockCollectorPermission()
