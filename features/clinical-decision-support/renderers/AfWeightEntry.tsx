@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { CdssPatientProfile } from '../types'
 import type { ClinicVitalsPatch } from '../stores/clinic-vitals.store'
@@ -50,65 +49,45 @@ function WeightForm({ isEnglish, saving, failed, onSave }: Required<Pick<Props, 
   onSave: (patch: ClinicVitalsPatch) => Promise<void>
 }) {
   const id = useId()
-  const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
   const [error, setError] = useState<string>()
-  const input = useRef<HTMLInputElement>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
-  const submit = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => { if (open) input.current?.focus() }, [open])
-  // Ready to try again with what was typed.
-  useEffect(() => { if (failed) submit.current?.focus() }, [failed])
+  // One field and nothing to press (owner request 2026-11-26): the weight typed
+  // in the room is today's, and leaving the field or pressing Enter applies it.
+  const apply = () => {
+    if (saving || !value.trim()) return
+    const number = Number(value)
+    if (!Number.isFinite(number) || number <= 0) {
+      setError(isEnglish ? 'Enter an actual weight greater than 0 kg.' : '請輸入大於 0 kg 的實際體重。')
+      return
+    }
+    void onSave({ entries: { bodyWeight: { value: number } } })
+  }
 
   return (
-    <div className="space-y-2 border-t border-border px-3 py-3 text-sm" data-testid="cdss-af-weight-entry">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+    <form className="space-y-2 border-t border-border px-3 py-3 text-sm" data-testid="cdss-af-weight-entry" noValidate
+      onSubmit={event => { event.preventDefault(); apply() }}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <p>{isEnglish ? 'Weight is missing; CrCl cannot be calculated.' : '缺少體重，無法計算 CrCl。'}</p>
-        <Button ref={trigger} type="button" variant="outline" className="min-h-11"
-          aria-expanded={open} aria-controls={`${id}-form`} onClick={() => { setOpen(!open); setError(undefined) }}>
-          {isEnglish ? 'Enter weight' : '補登體重'}
-        </Button>
+        <label className="flex items-center gap-2" htmlFor={`${id}-weight`}>
+          {isEnglish ? 'Weight (kg)' : '體重（kg）'}
+          <Input id={`${id}-weight`} type="number" inputMode="decimal" min="0" step="any"
+            className="h-11 w-28" value={value} onChange={event => { setValue(event.target.value); setError(undefined) }}
+            onBlur={apply} aria-invalid={error ? true : undefined}
+            aria-describedby={`${id}-hint${error ? ` ${id}-error` : ''}`} />
+        </label>
       </div>
-      {open ? (
-        <form id={`${id}-form`} className="space-y-2" noValidate onSubmit={event => {
-          event.preventDefault()
-          const number = value.trim() ? Number(value) : NaN
-          if (!Number.isFinite(number) || number <= 0) {
-            setError(isEnglish ? 'Enter an actual weight greater than 0 kg.' : '請輸入大於 0 kg 的實際體重。')
-            input.current?.focus()
-            return
-          }
-          // Entered in the room: the measurement is today's, so nobody types a date (owner request 2026-11-26).
-          if (!saving) void onSave({ entries: { bodyWeight: { value: number } } })
-        }}>
-          <p id={`${id}-hint`} className="text-muted-foreground">
-            {isEnglish ? "Enter the current weight; it is recorded as today's. The dose assessment updates after applying it." : '請填目前體重，視為今天量測；套用後重新評估劑量。'}
-          </p>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1" htmlFor={`${id}-weight`}>
-              {isEnglish ? 'Weight (kg)' : '體重（kg）'}
-              <Input ref={input} id={`${id}-weight`} type="number" inputMode="decimal" min="0" step="any"
-                className="h-11 w-32" value={value} onChange={event => { setValue(event.target.value); setError(undefined) }}
-                aria-invalid={error ? true : undefined}
-                aria-describedby={`${id}-hint${error ? ` ${id}-error` : ''}`} />
-            </label>
-            <Button ref={submit} type="submit" className="min-h-11" aria-disabled={saving || undefined}>{isEnglish ? 'Apply weight' : '套用體重'}</Button>
-            <Button type="button" variant="ghost" className="min-h-11" disabled={saving} onClick={() => {
-              setOpen(false); setError(undefined); trigger.current?.focus()
-            }}>{isEnglish ? 'Cancel' : '取消'}</Button>
-          </div>
-          {error ? <p id={`${id}-error`} role="alert" className="text-destructive">{error}</p> : null}
-          {saving ? <p role="status" className="text-muted-foreground">{isEnglish ? 'Saving…' : '儲存中…'}</p> : null}
-          {failed && !saving ? (
-            <p role="alert" className="text-destructive">
-              {isEnglish
-                ? 'The weight could not be saved, so the dose assessment does not use it. Select Apply weight to try again.'
-                : '體重未能儲存，劑量評估未使用這筆體重。請再按「套用體重」重試。'}
-            </p>
-          ) : null}
-        </form>
+      <p id={`${id}-hint`} className="text-muted-foreground">
+        {isEnglish ? "Enter the current weight: it is applied as today's measurement and the dose is reassessed." : '輸入目前體重即套用，視為今天量測，並重新評估劑量。'}
+      </p>
+      {error ? <p id={`${id}-error`} role="alert" className="text-destructive">{error}</p> : null}
+      {saving ? <p role="status" className="text-muted-foreground">{isEnglish ? 'Saving…' : '儲存中…'}</p> : null}
+      {failed && !saving ? (
+        <p role="alert" className="text-destructive">
+          {isEnglish
+            ? 'The weight could not be saved, so the dose assessment does not use it. Enter it again to retry.'
+            : '體重未能儲存，劑量評估未使用這筆體重。請再輸入一次重試。'}
+        </p>
       ) : null}
-    </div>
+    </form>
   )
 }

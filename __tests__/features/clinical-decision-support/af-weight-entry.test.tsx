@@ -57,12 +57,10 @@ describe('AF missing-weight recovery', () => {
     render(<Reading />)
     const table = screen.getByTestId('cdss-book-dose-table')
     expect(table).toHaveTextContent('缺 CrCl')
-    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     const input = screen.getByLabelText('體重（kg）')
     expect(screen.queryByLabelText('量測日期')).not.toBeInTheDocument()
-    expect(input).toHaveFocus()
     fireEvent.change(input, { target: { value: '68' } })
-    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    fireEvent.blur(screen.getByLabelText('體重（kg）'))
     expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-20' })
     expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
     expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
@@ -73,9 +71,8 @@ describe('AF missing-weight recovery', () => {
 
   it('does not fabricate CrCl or a dose when creatinine is also missing', async () => {
     render(<Reading hasCr={false} />)
-    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
-    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    fireEvent.blur(screen.getByLabelText('體重（kg）'))
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 Cr（mg/dL）')
     expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
@@ -83,13 +80,11 @@ describe('AF missing-weight recovery', () => {
 
   it('keeps saved weights and unsaved drafts with their patient', () => {
     const { rerender } = render(<Reading />)
-    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
     rerender(<Reading patientId="weight-b" />)
-    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     expect(screen.getByLabelText('體重（kg）')).toHaveValue(null)
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '55' } })
-    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    fireEvent.blur(screen.getByLabelText('體重（kg）'))
     rerender(<Reading />)
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
     expect(useClinicVitalsStore.getState().byPatientId['weight-a']?.entries.bodyWeight).toBeUndefined()
@@ -98,9 +93,8 @@ describe('AF missing-weight recovery', () => {
 
   it('keeps the added weight in the patient’s stored CDSS record across a reload of this tab', async () => {
     const { unmount } = render(<Reading />)
-    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
-    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    fireEvent.blur(screen.getByLabelText('體重（kg）'))
     await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')
     // Sealed: no plaintext field or date. (A bare '68' can occur in base64 by chance.)
     expectSealedEnvelope(await storedCiphertext(clinicVitalsStorageKey('weight-a')), ['"bodyWeight"', '"value":68', '2026-10-20'])
@@ -125,20 +119,18 @@ describe('AF missing-weight recovery', () => {
     setPatientAnswerBacking({ ...createMemoryPatientAnswerBacking(), save })
     try {
       render(<Reading />)
-      fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
       fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
-      fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
-      expect(await screen.findByText('體重未能儲存，劑量評估未使用這筆體重。請再按「套用體重」重試。')).toBeInTheDocument()
+      fireEvent.blur(screen.getByLabelText('體重（kg）'))
+      expect(await screen.findByText('體重未能儲存，劑量評估未使用這筆體重。請再輸入一次重試。')).toBeInTheDocument()
       expect(screen.queryByText(/已存入 CDSS/)).not.toBeInTheDocument()
       // Taken back out of the page: nothing is computed from an unsaved weight.
       expect(useClinicVitalsStore.getState().byPatientId['weight-a']?.entries.bodyWeight).toBeUndefined()
       expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
       // What was typed is still there, ready for another try.
       expect(screen.getByLabelText('體重（kg）')).toHaveValue(68)
-      expect(screen.getByRole('button', { name: '套用體重' })).toHaveFocus()
 
       save.mockImplementation(() => Promise.resolve(true))
-      fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+      fireEvent.blur(screen.getByLabelText('體重（kg）'))
       expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
       expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-20' })
     } finally {
@@ -155,15 +147,14 @@ describe('AF missing-weight recovery', () => {
   it('also offers recovery in the three-section AF view', () => {
     render(<Reading layout="flow" />)
     fireEvent.click(within(screen.getByTestId('cdss-af-diagnosis')).getByRole('button'))
-    expect(screen.getByRole('button', { name: '補登體重' })).toBeInTheDocument()
+    expect(screen.getByLabelText('體重（kg）')).toBeInTheDocument()
   })
 
   it('keeps the AF weight when the clinic form later saves blood pressure', () => {
     render(<Reading layout="flow" />)
     fireEvent.click(within(screen.getByTestId('cdss-af-diagnosis')).getByRole('button'))
-    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
-    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    fireEvent.blur(screen.getByLabelText('體重（kg）'))
     fireEvent.click(screen.getByRole('button', { name: '門診量測' }))
     fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-systolic'), { target: { value: '130' } })
     fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-diastolic'), { target: { value: '80' } })
@@ -174,20 +165,16 @@ describe('AF missing-weight recovery', () => {
 
   it('supports the English dose table', () => {
     render(<Reading locale="en" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Enter weight' }))
     expect(screen.getByLabelText('Weight (kg)')).toBeInTheDocument()
     expect(screen.queryByLabelText('Measurement date')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByLabelText('Weight (kg)')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enter weight' })).toHaveFocus()
+    expect(screen.queryByRole('button', { name: /weight/i })).not.toBeInTheDocument()
   })
 
-  it.each(['', '0', '-1'])('rejects invalid weight %s without saving', value => {
+  it.each(['0', '-1'])('rejects invalid weight %s without saving', value => {
     const save = jest.fn()
     render(<AfWeightEntry isEnglish={false} now={NOW} onSave={save} />)
-    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value } })
-    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    fireEvent.blur(screen.getByLabelText('體重（kg）'))
     expect(screen.getByRole('alert')).toHaveTextContent('大於 0')
     expect(save).not.toHaveBeenCalled()
   })
