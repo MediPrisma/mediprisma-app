@@ -382,8 +382,14 @@ export class GenerateSafetyAlertsUseCase {
     if (startIndex < 0) return null
     const contentStart = startIndex + SAFETY_BATCH_BLOCK_START.length
     const endIndex = text.indexOf(SAFETY_BATCH_BLOCK_END, contentStart)
-    if (endIndex < 0) return null
-    return this.parseScanResult(text.slice(contentStart, endIndex), catalog)
+    if (endIndex >= 0) return this.parseScanResult(text.slice(contentStart, endIndex), catalog)
+    // The closing marker is missing or miswritten (seen from the hospital Luna:
+    // `<<<END_OF_MEDIPRISMA_MODULE:safety>>` after a complete object). Read up
+    // to the next block or the end of the reply, as the summary modules do; a
+    // truncated object still fails to parse. Streaming callers publish only
+    // on hasCompleteBatchModuleBlock, so this runs on a finished reply.
+    const nextStart = text.indexOf('<<<MEDIPRISMA_MODULE:', contentStart)
+    return this.parseScanResult(text.slice(contentStart, nextStart >= 0 ? nextStart : text.length), catalog)
   }
 
   /**
