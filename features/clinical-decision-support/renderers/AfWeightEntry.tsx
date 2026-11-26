@@ -16,6 +16,9 @@ interface Props {
 
 type SaveState = 'idle' | 'saving' | 'applied' | 'failed'
 
+/** The AF dose rules take no weight measured longer ago than this (personalized-care 2.31.0). */
+const MAX_WEIGHT_AGE_DAYS = 90
+
 /**
  * A missing dose input goes through the same per-patient measurement store as
  * clinic vitals: typed here, the weight is used for this visit, and it reaches
@@ -27,14 +30,19 @@ type SaveState = 'idle' | 'saving' | 'applied' | 'failed'
  */
 export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
   const [state, setState] = useState<SaveState>('idle')
-  const hasWeight = weight?.numericValue !== undefined && Number.isFinite(weight.numericValue)
+  const onFile = weight?.numericValue !== undefined && Number.isFinite(weight.numericValue)
     && weight.numericValue > 0 && weight.unit?.toLowerCase() === 'kg'
-  const enteredToday = hasWeight && weight?.date?.slice(0, 10) === todayIsoDate(now) && CLINIC_ENTRY_PATTERN.test(weight.zh)
+  // A weight the dose rules do not take (over 90 days old, or undated) is asked for like a missing one.
+  const measuredOn = weight?.date?.slice(0, 10)
+  const age = measuredOn ? Math.floor((Date.parse(todayIsoDate(now)) - Date.parse(measuredOn)) / 86_400_000) : NaN
+  const hasWeight = onFile && Number.isFinite(age) && age <= MAX_WEIGHT_AGE_DAYS
+  const unused = onFile && !hasWeight ? { reading: `${weight!.numericValue} kg`, measuredOn } : undefined
+  const enteredToday = hasWeight && measuredOn === todayIsoDate(now) && CLINIC_ENTRY_PATTERN.test(weight!.zh)
 
   if (!onSave) return null
   if (hasWeight && !enteredToday && state === 'idle') return null
   // What was just typed here is in use even where the page's clock and the store's disagree on the day.
-  return <WeightForm isEnglish={isEnglish} applied={hasWeight && (enteredToday || state === 'applied') ? weight!.numericValue : undefined}
+  return <WeightForm isEnglish={isEnglish} applied={hasWeight && (enteredToday || state === 'applied') ? weight!.numericValue : undefined} unused={unused}
     saving={state === 'saving'} failed={state === 'failed'} onSave={async patch => {
       setState('saving')
       const kept = await Promise.resolve(onSave(patch)).then(result => result ?? true, () => false)
@@ -43,7 +51,9 @@ export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
     }} />
 }
 
-function WeightForm({ isEnglish, applied, saving, failed, onSave }: Required<Pick<Props, 'isEnglish'>> & {
+function WeightForm({ isEnglish, applied, unused, saving, failed, onSave }: Required<Pick<Props, 'isEnglish'>> & {
+  /** The weight on file that the dose rules do not take, so the form can say why it asks. */
+  unused?: { reading: string; measuredOn?: string }
   /** The weight entered today that the page is using, if there is one. */
   applied?: number
   saving: boolean
@@ -75,7 +85,15 @@ function WeightForm({ isEnglish, applied, saving, failed, onSave }: Required<Pic
     <form className="space-y-2 border-t border-border px-3 py-3 text-sm" data-testid="cdss-af-weight-entry" noValidate
       onSubmit={event => { event.preventDefault(); apply() }}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {applied === undefined ? <p>{isEnglish ? 'Weight is missing; CrCl cannot be calculated.' : '缺少體重，無法計算 CrCl。'}</p> : null}
+        {applied === undefined ? <p>{unused
+          ? unused.measuredOn
+            ? (isEnglish
+              ? `The weight on file, ${unused.reading} (${unused.measuredOn}), is over ${MAX_WEIGHT_AGE_DAYS} days old and is not used; CrCl cannot be calculated.`
+              : `病歷體重 ${unused.reading}（${unused.measuredOn}）已超過 ${MAX_WEIGHT_AGE_DAYS} 天，不採用，無法計算 CrCl。`)
+            : (isEnglish
+              ? `The weight on file, ${unused.reading}, has no measurement date and is not used; CrCl cannot be calculated.`
+              : `病歷體重 ${unused.reading} 沒有量測日期，不採用，無法計算 CrCl。`)
+          : isEnglish ? 'Weight is missing; CrCl cannot be calculated.' : '缺少體重，無法計算 CrCl。'}</p> : null}
         <label className="flex items-center gap-2" htmlFor={`${id}-weight`}>
           {isEnglish ? 'Weight (kg)' : '體重（kg）'}
           <Input id={`${id}-weight`} type="number" inputMode="decimal" min="0" step="any"
