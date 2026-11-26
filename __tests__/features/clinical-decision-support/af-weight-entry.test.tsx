@@ -62,11 +62,26 @@ describe('AF missing-weight recovery', () => {
     fireEvent.change(input, { target: { value: '68' } })
     fireEvent.blur(screen.getByLabelText('體重（kg）'))
     expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-20' })
-    expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
-    expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
+    // Used for this visit; kept for the next one only by saving the CDSS record. The field stays, to correct it.
+    expect(await screen.findByText('已帶入 68 kg（視為今天量測），可直接改數值。儲存 CDSS 紀錄後才會留到下次。')).toBeInTheDocument()
+    expect(screen.queryByText(/已存入 CDSS/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('體重（kg）')).toHaveValue(68)
     expect(table).toHaveAttribute('aria-label', expect.stringContaining('CrCl 41'))
     expect(table).not.toHaveTextContent('缺 CrCl')
     expect(within(table).getByText('15 mg qd')).toBeInTheDocument()
+  })
+
+  it('a mistyped weight is corrected in the same field, and the dose follows', async () => {
+    render(<Reading />)
+    const field = () => screen.getByLabelText('體重（kg）')
+    fireEvent.change(field(), { target: { value: '86' } })
+    fireEvent.blur(field())
+    await screen.findByText(/已帶入 86 kg/)
+    fireEvent.change(field(), { target: { value: '68' } })
+    fireEvent.blur(field())
+    await screen.findByText(/已帶入 68 kg/)
+    expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight?.value).toBe(68)
+    expect(screen.getByTestId('cdss-book-dose-table')).toHaveAttribute('aria-label', expect.stringContaining('CrCl 41'))
   })
 
   it('does not fabricate CrCl or a dose when creatinine is also missing', async () => {
@@ -75,7 +90,7 @@ describe('AF missing-weight recovery', () => {
     fireEvent.blur(screen.getByLabelText('體重（kg）'))
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 Cr（mg/dL）')
-    expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
+    expect(await screen.findByText(/已帶入 68 kg/)).toBeInTheDocument()
   })
 
   it('keeps saved weights and unsaved drafts with their patient', () => {
@@ -95,7 +110,7 @@ describe('AF missing-weight recovery', () => {
     const { unmount } = render(<Reading />)
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
     fireEvent.blur(screen.getByLabelText('體重（kg）'))
-    await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')
+    await screen.findByText(/已帶入 68 kg/)
     // Sealed: no plaintext field or date. (A bare '68' can occur in base64 by chance.)
     expectSealedEnvelope(await storedCiphertext(clinicVitalsStorageKey('weight-a')), ['"bodyWeight"', '"value":68', '2026-10-20'])
     unmount()
@@ -121,8 +136,8 @@ describe('AF missing-weight recovery', () => {
       render(<Reading />)
       fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
       fireEvent.blur(screen.getByLabelText('體重（kg）'))
-      expect(await screen.findByText('體重未能儲存，劑量評估未使用這筆體重。請再輸入一次重試。')).toBeInTheDocument()
-      expect(screen.queryByText(/已存入 CDSS/)).not.toBeInTheDocument()
+      expect(await screen.findByText('體重未能帶入，劑量評估未使用這筆體重。請再輸入一次重試。')).toBeInTheDocument()
+      expect(screen.queryByText(/已帶入/)).not.toBeInTheDocument()
       // Taken back out of the page: nothing is computed from an unsaved weight.
       expect(useClinicVitalsStore.getState().byPatientId['weight-a']?.entries.bodyWeight).toBeUndefined()
       expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
@@ -131,7 +146,7 @@ describe('AF missing-weight recovery', () => {
 
       save.mockImplementation(() => Promise.resolve(true))
       fireEvent.blur(screen.getByLabelText('體重（kg）'))
-      expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
+      expect(await screen.findByText(/已帶入 68 kg/)).toBeInTheDocument()
       expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-20' })
     } finally {
       setPatientAnswerBacking(working)
