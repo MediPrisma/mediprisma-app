@@ -159,6 +159,32 @@ test.each(['Network error', '503 Service Unavailable', 'monthly_budget_exhausted
   expect(mockResult.cardErrors).toHaveProperty('problems')
 })
 
+test.each([
+  ['recovers on the one retry', 1, false],
+  ['stops after one retry', 5, true],
+] as const)('hospital Luna asks once more for a card whose reply did not parse: %s', async (_name, badReplies, stillFailed) => {
+  renderHook(() => useMedicalSummary())
+  answerEverything()
+  const answer = mockStream.getMockImplementation()!
+  const isProblemsRequest = (messages: any[]) => contentOf(messages).includes('Final problem-list evidence check')
+  let problemsCalls = 0
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    if (!isProblemsRequest(messages) || ++problemsCalls > badReplies) return answer(messages, options)
+    options.onChunk('SYNTHETIC-NOT-A-MODULE')
+    return 'SYNTHETIC-NOT-A-MODULE'
+  })
+  await act(async () => runGeneration({ modelId: 'gpt-6-luna', requestedModelId: 'gpt-6-luna' }))
+  expect(problemsCalls).toBe(2)
+  // The lanes that parsed the first time are not asked again.
+  expect(mockStream.mock.calls.filter(([messages]) => !isProblemsRequest(messages) && !isReportsRequest(messages))).toHaveLength(1)
+  expect(reportsCalls()).toHaveLength(1)
+  if (stillFailed) expect(mockResult.cardErrors).toMatchObject({ problems: 'PARSE_FAILED' })
+  else {
+    expect(mockResult.cardErrors).toBeUndefined()
+    expect(mockResult.completedCardIds).toContain('problems')
+  }
+})
+
 test('hospital Luna summary asks for low reasoning on every request; other built-in models send none', async () => {
   renderHook(() => useMedicalSummary())
   answerEverything()
