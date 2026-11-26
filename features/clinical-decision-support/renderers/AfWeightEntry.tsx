@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { CdssPatientProfile } from '../types'
 import { todayIsoDate, type ClinicVitalsPatch } from '../stores/clinic-vitals.store'
-import { utcDay } from '@/src/core/utils/calendar-day'
 
 interface Props {
   weight?: CdssPatientProfile['facts'][string]
@@ -45,7 +44,7 @@ export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
     </p>
   )
   if (hasWeight && state === 'idle') return null
-  return <WeightForm isEnglish={isEnglish} now={now} unused={unused} saving={state === 'saving'} failed={state === 'failed'} onSave={async patch => {
+  return <WeightForm isEnglish={isEnglish} unused={unused} saving={state === 'saving'} failed={state === 'failed'} onSave={async patch => {
     setState('saving')
     const kept = await Promise.resolve(onSave(patch)).then(result => result ?? true, () => false)
     if (!kept) void onSave({ entries: { bodyWeight: null } })
@@ -53,7 +52,7 @@ export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
   }} />
 }
 
-function WeightForm({ isEnglish, now, unused, saving, failed, onSave }: Required<Pick<Props, 'isEnglish' | 'now'>> & {
+function WeightForm({ isEnglish, unused, saving, failed, onSave }: Required<Pick<Props, 'isEnglish'>> & {
   /** The weight on file that the dose rules do not take, so the form can say why it asks. */
   unused?: { reading: string; measuredOn?: string }
   saving: boolean
@@ -63,11 +62,8 @@ function WeightForm({ isEnglish, now, unused, saving, failed, onSave }: Required
   const id = useId()
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
-  const today = todayIsoDate(now)
-  const [measuredOn, setMeasuredOn] = useState('')
-  const [error, setError] = useState<{ field: 'weight' | 'date'; message: string }>()
+  const [error, setError] = useState<string>()
   const input = useRef<HTMLInputElement>(null)
-  const dateInput = useRef<HTMLInputElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const submit = useRef<HTMLButtonElement>(null)
 
@@ -97,50 +93,30 @@ function WeightForm({ isEnglish, now, unused, saving, failed, onSave }: Required
           event.preventDefault()
           const number = value.trim() ? Number(value) : NaN
           if (!Number.isFinite(number) || number <= 0) {
-            setError({ field: 'weight', message: isEnglish ? 'Enter an actual weight greater than 0 kg.' : '請輸入大於 0 kg 的實際體重。' })
+            setError(isEnglish ? 'Enter an actual weight greater than 0 kg.' : '請輸入大於 0 kg 的實際體重。')
             input.current?.focus()
             return
           }
-          const date = new Date(measuredOn)
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(measuredOn) || !Number.isFinite(date.getTime())
-            || utcDay(date) !== measuredOn || measuredOn > today) {
-            setError({ field: 'date', message: isEnglish ? 'Enter a valid measurement date, no later than today.' : '請填寫有效的量測日期，不能晚於今天。' })
-            dateInput.current?.focus()
-            return
-          }
-          // A weight the dose rules would not use is not taken as if they did.
-          if (Math.floor((Date.parse(today) - Date.parse(measuredOn)) / 86_400_000) > MAX_WEIGHT_AGE_DAYS) {
-            setError({ field: 'date', message: isEnglish
-              ? `A weight measured over ${MAX_WEIGHT_AGE_DAYS} days ago is not used for dosing. Enter one measured within ${MAX_WEIGHT_AGE_DAYS} days.`
-              : `超過 ${MAX_WEIGHT_AGE_DAYS} 天的體重不用於劑量判斷，請填 ${MAX_WEIGHT_AGE_DAYS} 天內量測的體重。` })
-            dateInput.current?.focus()
-            return
-          }
-          if (!saving) void onSave({ entries: { bodyWeight: { value: number, measuredOn } } })
+          // Entered in the room: the measurement is today's, so nobody types a date (owner request 2026-11-26).
+          if (!saving) void onSave({ entries: { bodyWeight: { value: number } } })
         }}>
           <p id={`${id}-hint`} className="text-muted-foreground">
-            {isEnglish ? `Use a weight measured within ${MAX_WEIGHT_AGE_DAYS} days and its original date. The dose assessment updates after applying it.` : `請填 ${MAX_WEIGHT_AGE_DAYS} 天內實際量測的體重與原量測日期；套用後重新評估劑量。`}
+            {isEnglish ? "Enter the current weight; it is recorded as today's. The dose assessment updates after applying it." : '請填目前體重，視為今天量測；套用後重新評估劑量。'}
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1" htmlFor={`${id}-weight`}>
               {isEnglish ? 'Weight (kg)' : '體重（kg）'}
               <Input ref={input} id={`${id}-weight`} type="number" inputMode="decimal" min="0" step="any"
                 className="h-11 w-32" value={value} onChange={event => { setValue(event.target.value); setError(undefined) }}
-                aria-invalid={error?.field === 'weight' || undefined}
-                aria-describedby={`${id}-hint${error?.field === 'weight' ? ` ${id}-error` : ''}`} />
-            </label>
-            <label className="flex flex-col gap-1" htmlFor={`${id}-date`}>
-              {isEnglish ? 'Measurement date' : '量測日期'}
-              <Input ref={dateInput} id={`${id}-date`} type="date" max={today} className="h-11 w-44" value={measuredOn}
-                aria-invalid={error?.field === 'date' || undefined} aria-describedby={`${id}-hint${error?.field === 'date' ? ` ${id}-error` : ''}`}
-                onChange={event => { setMeasuredOn(event.target.value); setError(undefined) }} />
+                aria-invalid={error ? true : undefined}
+                aria-describedby={`${id}-hint${error ? ` ${id}-error` : ''}`} />
             </label>
             <Button ref={submit} type="submit" className="min-h-11" aria-disabled={saving || undefined}>{isEnglish ? 'Apply weight' : '套用體重'}</Button>
             <Button type="button" variant="ghost" className="min-h-11" disabled={saving} onClick={() => {
               setOpen(false); setError(undefined); trigger.current?.focus()
             }}>{isEnglish ? 'Cancel' : '取消'}</Button>
           </div>
-          {error ? <p id={`${id}-error`} role="alert" className="text-destructive">{error.message}</p> : null}
+          {error ? <p id={`${id}-error`} role="alert" className="text-destructive">{error}</p> : null}
           {saving ? <p role="status" className="text-muted-foreground">{isEnglish ? 'Saving…' : '儲存中…'}</p> : null}
           {failed && !saving ? (
             <p role="alert" className="text-destructive">
