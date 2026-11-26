@@ -373,6 +373,42 @@ describe('bringing in the last record on opening', () => {
     expect(onCarryForward).not.toHaveBeenCalled()
   })
 
+  test('the weight is asked of the newest record of any disease, read once more only when it is another record, once per tab (#622)', async () => {
+    const mine = await auto('66666666-6666-4666-8666-666666666666')
+    const otherId = '77777777-7777-4777-8777-777777777777'
+    const other = { ...(await detail({ save_id: otherId, patient_session_id: otherId, pack_id: 'other', result: { ...result, packId: 'other' }, saved_at: '2026-10-05T00:00:00Z' })),
+      saveId: otherId, packId: 'other', receivedAt: '2026-10-05T00:00:00Z', savedAt: '2026-10-05T00:00:00Z' }
+    const rows = [{ ...index, saveId: mine.saveId }, { ...index, saveId: otherId, packId: 'other', receivedAt: '2026-10-05T00:00:00Z' }]
+    jest.mocked(fetch).mockImplementation(async (url, init) => response(!String(url).endsWith('/read') ? { records: rows, hasMore: false }
+      : JSON.parse(String(init?.body)).save_id === otherId ? other : mine))
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryForward = jest.fn(() => 0)
+    const onCarryWeight = jest.fn(() => ({ value: 61, measuredOn: '2026-09-28' }))
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} onCarryWeight={onCarryWeight} autoCarryReady />)
+    await waitFor(() => expect(onCarryWeight).toHaveBeenCalledWith(other))
+    // The disease's own record leaves its weight alone: only the newest record's is taken.
+    expect(onCarryForward).toHaveBeenCalledWith(mine, { inputs: true, decisions: true, weight: false })
+    expect(told).toHaveBeenCalledWith('已帶入上次儲存的體重 61 kg（2026-09-28 量測）。')
+    expect(fetch).toHaveBeenCalledTimes(3)
+    view.unmount()
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} onCarryWeight={onCarryWeight} autoCarryReady />)
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4))
+    await act(async () => { await Promise.resolve() })
+    expect(onCarryWeight).toHaveBeenCalledTimes(1)
+    told.mockRestore()
+  })
+
+  test('the record just brought in is asked for its weight without a second read, and a host with no use for it is not announced', async () => {
+    const stored = await auto('88888888-8888-4888-8888-888888888888')
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryWeight = jest.fn(() => undefined)
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={jest.fn(() => 0)} onCarryWeight={onCarryWeight} autoCarryReady />)
+    await waitFor(() => expect(onCarryWeight).toHaveBeenCalledWith(stored))
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(told).not.toHaveBeenCalled()
+    told.mockRestore()
+  })
+
   test('layouts that do not offer records bring nothing in', async () => {
     await auto('55555555-5555-4555-8555-555555555555')
     const onCarryForward = jest.fn(() => 1)

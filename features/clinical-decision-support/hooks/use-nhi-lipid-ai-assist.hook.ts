@@ -163,7 +163,7 @@ export function useNhiLipidAiAssist(input: {
       modelId,
       modelName,
     }
-    stopAi(operationKey)
+    stopAi(operationKey, 'superseded')
     useNhiLipidReviewStore.getState().beginAiRun(patientId, metadata)
     const collector = beginCollectorObservation({ feature: 'nhi_lipid', modelId, sampleKind: 'feature', mode: 'structured' })
     let collectorPhase: 'request' | 'validation' = 'request'

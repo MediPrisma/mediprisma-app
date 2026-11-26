@@ -7,7 +7,7 @@ import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelI
 import { sameModelVersion } from '@/src/shared/utils/ai-model-execution'
 import { captureCollectorAuth } from './collector-auth'
 import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
-import { collectorEventV11Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorEventV10, type CollectorEventV11, type CollectorAppSurface, type CollectorRequestV11 as CollectorRequest, type SummaryAttempt, type TokenUsage } from '@/src/shared/contracts/collector-event'
+import { collectorEventV12Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorEventV10, type CollectorEventV11, type CollectorEventV12, type CollectorAppSurface, type CollectorRequestV12 as CollectorRequest, type SummaryAttempt, type TokenUsage } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -22,6 +22,8 @@ export interface CollectorContext {
   fedCounts?: PreparedCounts
   contextTokens?: number
   contextTrimmed?: boolean
+  /** Estimated context size before and after fitting (v12); sent as two buckets, only with a trimmed context. */
+  contextTrim?: { originalTokens: number; adaptedTokens: number }
 }
 type Start = CollectorContext & {
   feature: CollectorEvent['feature']
@@ -37,6 +39,13 @@ type Finish = {
   modelId?: string
   modelSource?: CollectorEvent['model_source']
   httpStatus?: number
+  /** What the hospital AI gateway answered a refused request with (v12): its fixed error code, whether it
+   *  reached the upstream model, and its random request ID. Never the message or body. */
+  gateway?: GatewayFailure
+  /** Why the model stopped producing output (v12), as the AI service reported it. */
+  finishReason?: CollectorEventV12['diagnostics']['finish_reason']
+  /** Why a request was cancelled (v12). Sent only with an aborted or timed-out outcome. */
+  abortReason?: CollectorAbortReason
   /** Token counts the AI service reported for this request; never an estimate. */
   usage?: { inputTokens?: number; outputTokens?: number }
   summaryCards?: SummaryCardCounts
@@ -44,6 +53,8 @@ type Finish = {
   /** Random run ID shared with this summary's v7 attempts; names the operation (v8). */
   summaryRunId?: string
 }
+export type CollectorAbortReason = NonNullable<CollectorEventV12['diagnostics']['abort_reason']>
+export type GatewayFailure = Pick<CollectorEventV12['diagnostics'], 'gateway_error_code' | 'upstream_attempted' | 'gateway_request_id'>
 /** One user operation: AI requests made inside it are recorded into its single event. */
 export interface CollectorOperation { observeRequest: (input: Start) => Observation }
 interface Observation { finish: (result: Finish) => void; firstChunk: () => void; operation?: CollectorOperation }
@@ -53,7 +64,7 @@ const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
 // Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
-type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9 | CollectorEventV10 | CollectorEventV11
+type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9 | CollectorEventV10 | CollectorEventV11 | CollectorEventV12
 const isSummaryAttemptEvent = (event: WireEvent) => (event.schema_version === 7 || event.schema_version >= 10) && 'summary_attempt' in event.diagnostics
 const pending: Array<{event: WireEvent; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
 const MAX_PENDING = 64
@@ -316,6 +327,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
     const configured = modelInfo(input.modelId, input.provider)
     const provider = input.provider
     const trimmed = input.contextTrimmed
+    const trimBefore = tokenBucket(input.contextTrim?.originalTokens), trimAfter = tokenBucket(input.contextTrim?.adaptedTokens)
     const template = feature === 'insights' && kind === 'request' ? templateLabel(input.template) : undefined
     let ended = false
     let firstChunk: number | undefined
@@ -345,7 +357,12 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
             response_complete: event.response_complete, phase: d.phase, mode: d.mode,
             ...(d.first_chunk_ms !== undefined ? { first_chunk_ms: d.first_chunk_ms } : {}),
             ...(d.http_status !== undefined ? { http_status: d.http_status } : {}),
-            ...('usage' in d && d.usage ? { usage: d.usage } : {}) }
+            ...('usage' in d && d.usage ? { usage: d.usage } : {}),
+            ...('gateway_error_code' in d && d.gateway_error_code !== undefined ? { gateway_error_code: d.gateway_error_code } : {}),
+            ...('upstream_attempted' in d && d.upstream_attempted !== undefined ? { upstream_attempted: d.upstream_attempted } : {}),
+            ...('gateway_request_id' in d && d.gateway_request_id !== undefined ? { gateway_request_id: d.gateway_request_id } : {}),
+            ...('finish_reason' in d && d.finish_reason !== undefined ? { finish_reason: d.finish_reason } : {}),
+            ...('abort_reason' in d && d.abort_reason !== undefined ? { abort_reason: d.abort_reason } : {}) }
         }, source)
         // A parent may end before a cancelled transport reports; keep an explicit incomplete entry.
         requestSnapshots.push(() => {
@@ -369,9 +386,9 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
             ? configured : modelInfo(result.modelId, provider)
           // v8: a summary operation that knows its run; v6: any other operation; v7/v5: requests.
           const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
-          const version = 11
+          const version = 12
           const usage = tokenUsage(result.usage)
-          const parsed = collectorEventV11Schema.safeParse({
+          const parsed = collectorEventV12Schema.safeParse({
             schema_version: version, app_surface: collectorAppSurface(), ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
@@ -386,12 +403,19 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
               ...(tokens ? { context_tokens_bucket: tokens } : {}),
               ...(firstChunk !== undefined ? { first_chunk_ms: firstChunk } : {}),
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
+              // A gateway failure describes a request that did not complete; drop it otherwise rather than lose the event.
+              ...(result.outcome !== 'ok' ? result.gateway : {}),
+              ...(result.finishReason ? { finish_reason: result.finishReason } : {}),
+              ...(result.abortReason && (result.outcome === 'aborted' || result.outcome === 'timeout') ? { abort_reason: result.abortReason } : {}),
               ...(usage ? { usage } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
               ...(runId ? { summary_run_id: runId } : {}),
               ...(template ? { template } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
+              // Which record types the fitting cut is not known here: `prepared` also reflects the user's own
+              // data selection, so no category is claimed.
+              ...(trimmed === true && trimBefore && trimAfter ? { context_trim: { before: trimBefore, after: trimAfter, categories: [] } } : {}),
               ...(kind === 'feature' && requestCount > 0 ? { requests: { count: requestCount, omitted: requestCount - requests.length, details: requests } } : {}),
             },
           })

@@ -48,3 +48,32 @@ describe('AiSdkStreamAdapter token usage', () => {
     expect(onUsage).not.toHaveBeenCalled()
   })
 })
+
+describe('AiSdkStreamAdapter finish reason', () => {
+  beforeEach(() => jest.clearAllMocks())
+  const withReason = (onFinishReason: jest.Mock) => ({ ...config(jest.fn()), onFinishReason })
+
+  it('reports why the model stopped once the stream completes', async () => {
+    mockStreamText.mockReturnValue({ textStream: textStream('he'), usage: Promise.resolve({}), finishReason: Promise.resolve('length') })
+    const onFinishReason = jest.fn()
+    await adapter().stream(withReason(onFinishReason))
+    expect(onFinishReason).toHaveBeenCalledTimes(1)
+    expect(onFinishReason).toHaveBeenCalledWith('length')
+  })
+
+  it('completes normally when no reason is reported or reading it fails, and stays silent for a failed stream', async () => {
+    const onFinishReason = jest.fn()
+    mockStreamText.mockReturnValue({ textStream: textStream('hello'), usage: Promise.resolve({}) })
+    await expect(adapter().stream(withReason(onFinishReason))).resolves.toBeUndefined()
+    const failed = Promise.reject(new Error('synthetic finish failure'))
+    failed.catch(() => {})
+    mockStreamText.mockReturnValue({ textStream: textStream('hello'), usage: Promise.resolve({}), finishReason: failed })
+    await expect(adapter().stream(withReason(onFinishReason))).resolves.toBeUndefined()
+    mockStreamText.mockImplementation(({ onError }: { onError: (event: { error: unknown }) => void }) => {
+      onError({ error: new Error('synthetic upstream failure') })
+      return { textStream: textStream(), usage: Promise.resolve({}), finishReason: Promise.resolve('error') }
+    })
+    await expect(adapter().stream(withReason(onFinishReason))).rejects.toThrow('synthetic upstream failure')
+    expect(onFinishReason).not.toHaveBeenCalled()
+  })
+})

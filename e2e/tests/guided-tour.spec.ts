@@ -266,12 +266,16 @@ test.describe('guided tours', () => {
             await page.evaluate(() => {
               const root = document.documentElement
               root.dataset.tourHighlightMissing = 'false'
-              const interval = window.setInterval(() => {
+              // Look once per painted frame. A timer sampled between frames
+              // and caught a frame without the highlight only now and then.
+              const startedAt = performance.now()
+              const checkFrame = () => {
                 if (!document.querySelector('[data-tour-overlay="right-highlight"]')) {
                   root.dataset.tourHighlightMissing = 'true'
                 }
-              }, 8)
-              window.setTimeout(() => window.clearInterval(interval), 300)
+                if (performance.now() - startedAt < 300) window.requestAnimationFrame(checkFrame)
+              }
+              window.requestAnimationFrame(checkFrame)
             })
           }
           await next.click()

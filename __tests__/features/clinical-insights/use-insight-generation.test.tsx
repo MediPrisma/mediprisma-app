@@ -130,7 +130,7 @@ describe("useInsightGeneration provenance", () => {
 
     act(() => result.current.stopPanel('first'))
     expect(mockStop).toHaveBeenCalledTimes(1)
-    expect(mockStop).toHaveBeenCalledWith('clinical-insight:patient-1:first')
+    expect(mockStop).toHaveBeenCalledWith('clinical-insight:patient-1:first', 'user_cancel')
     expect(useInsightResponsesStore.getState().panelStatus.first).toEqual({ isLoading: false, error: null })
     expect(useInsightResponsesStore.getState().panelStatus.second.isLoading).toBe(true)
 

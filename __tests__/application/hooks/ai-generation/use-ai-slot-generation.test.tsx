@@ -175,7 +175,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     await waitFor(() => expect(result.current.result?.headline).toBe('provisional automatic preview'))
     act(() => stopProgressiveImport('background-run', phase))
     expect(signal.aborted).toBe(true)
-    expect(mockStopAi).toHaveBeenCalledWith(result.current.slotKey)
+    expect(mockStopAi).toHaveBeenCalledWith(result.current.slotKey, 'superseded')
     await act(async () => finish())
     await waitFor(() => expect(result.current.isRunning).toBe(false))
     expect(result.current.result).toBeUndefined()

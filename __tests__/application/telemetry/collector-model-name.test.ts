@@ -2,7 +2,7 @@
 // missing from the contract list by its own ID, when the name fits the contract's format.
 import { beginCollectorObservation, cancelCollectorRequests } from '@/src/application/telemetry/collector'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
-import { collectorEventV11Schema } from '@/src/shared/contracts/collector-event'
+import { collectorEventV12Schema } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import { mockCollectorPermission } from '../../helpers/collector-permissions'
@@ -23,7 +23,7 @@ const send = async (modelId: string) => {
   beginCollectorObservation({ feature: 'chat', modelId, sampleKind: 'request', mode: 'stream' }).finish({ outcome: 'ok' })
   await settle()
   const payload = body()
-  expect(collectorEventV11Schema.safeParse(payload).success).toBe(true)
+  expect(collectorEventV12Schema.safeParse(payload).success).toBe(true)
   return payload
 }
 let permission: ReturnType<typeof mockCollectorPermission>

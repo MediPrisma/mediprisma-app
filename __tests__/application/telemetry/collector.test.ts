@@ -1,5 +1,6 @@
-import { beginCollectorObservation, collectorError, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
-import { collectorEventV11Schema } from '@/src/shared/contracts/collector-event'
+import { beginCollectorObservation, collectorError, collectorHttpStatus, collectorGatewayFailure, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
+import { collectorEventV12Schema } from '@/src/shared/contracts/collector-event'
+import { AiError, AiErrorCode } from '@/src/core/errors'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
@@ -55,7 +56,7 @@ test.each(['/?site=vghtpe', '/app/?site=vghtpe', '/app-hmc/?site=vghtpe'])('auto
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body().site).toBe('vghtpe')
   expect(body().app_surface).toBe(url.startsWith('/app-hmc') ? 'app-hmc' : url.startsWith('/app/') ? 'app' : 'other')
-  expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
+  expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
 })
 
 test.each(['prompt', 'denied'] as const)('permission %s skips telemetry without changing clinical success or cache', async (state) => {
@@ -225,8 +226,8 @@ test('exact resource counts and approved model codes leave the browser, once per
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
   const payload = body()
-  expect(collectorEventV11Schema.safeParse(payload).success).toBe(true)
-  expect(payload).toMatchObject({ schema_version: 11, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
+  expect(collectorEventV12Schema.safeParse(payload).success).toBe(true)
+  expect(payload).toMatchObject({ schema_version: 12, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
     diagnostics: { loaded: { total: 8237, medications: 47, encounters: 23, documents: 0, observations: 8121, reports: 19 },
       prepared: { total: 124, medications: 4, encounters: 11, observations: 100, reports: 8, documents: 0 },
       context_tokens_bucket: '32001-128000', context_trimmed: true } })
@@ -251,7 +252,7 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
     beginCollectorObservation({ feature: 'summary', modelId: model.id, sampleKind: 'feature', mode: 'structured' }).finish({ outcome: 'ok' })
     await settle()
     expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id)
-    expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
+    expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
   }
 })
 
@@ -260,7 +261,7 @@ test('the hospital Azure Luna is sent as gpt-6-luna, not unknown', async () => {
   await settle()
   const payload = body()
   expect(payload).toMatchObject({ model: 'gpt-6-luna', provider: 'openai' })
-  expect(collectorEventV11Schema.safeParse(payload).success).toBe(true)
+  expect(collectorEventV12Schema.safeParse(payload).success).toBe(true)
 })
 
 test('invalid counts are omitted, never rounded, made positive or coerced from strings', async () => {
@@ -271,7 +272,7 @@ test('invalid counts are omitted, never rounded, made positive or coerced from s
   await settle()
   expect(body().diagnostics).not.toHaveProperty('loaded')
   for (const value of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '12', '11-50', null]) {
-    expect(collectorEventV11Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
+    expect(collectorEventV12Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
   }
 })
 
@@ -281,13 +282,103 @@ test('rejects PHI-shaped fields and arbitrary error/feature strings on the wire'
   await settle()
   const payload = body()
   for (const field of ['prompt', 'response', 'patient_id', 'token', 'url', 'error_message']) {
-    expect(collectorEventV11Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
-    expect(collectorEventV11Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
+    expect(collectorEventV12Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
+    expect(collectorEventV12Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
   }
-  expect(collectorEventV11Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
+  expect(collectorEventV12Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
   expect(collectorFeature('SYNTHETIC-PATIENT-TITLE')).toBe('ai_other')
   expect(collectorFeature('__proto__')).toBe('ai_other')
   expect(collectorError(new Error('SYNTHETIC-SECRET'))).toBe('error')
+})
+
+test('a trimmed context reports its size before and after fitting as buckets, and claims no category', async () => {
+  const run = (context: Record<string, unknown>) => beginCollectorObservation({ feature: 'summary', modelId: 'gpt-5.4-nano', sampleKind: 'feature', mode: 'structured', ...context }).finish({ outcome: 'ok' })
+  run({ contextTokens: 31337, contextTrimmed: true, contextTrim: { originalTokens: 91234, adaptedTokens: 31337 } })
+  await settle()
+  expect(body().diagnostics).toMatchObject({ context_trimmed: true, context_tokens_bucket: '8001-32000',
+    context_trim: { before: '32001-128000', after: '8001-32000', categories: [] } })
+  expect(JSON.stringify(body())).not.toMatch(/91234|31337/)
+  expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
+  // Sizes without a trimmed context, or a trimmed context without sizes, send nothing extra.
+  for (const context of [{ contextTrimmed: false, contextTrim: { originalTokens: 91234, adaptedTokens: 31337 } }, { contextTrimmed: true },
+    { contextTrimmed: true, contextTrim: { originalTokens: Number.NaN, adaptedTokens: 31337 } }]) {
+    jest.mocked(fetch).mockClear()
+    run(context)
+    await settle()
+    expect(body().diagnostics.context_trim).toBeUndefined()
+    expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
+  }
+})
+
+test('a request the hospital AI gateway refused reports its fixed code, upstream flag and request ID, and nothing else', async () => {
+  const REQUEST_ID = '0990d49f-d1ad-4496-9ef7-c687d37109cc'
+  const refused = (code: unknown, headers: Record<string, string> = { 'x-request-id': REQUEST_ID, 'x-upstream-attempted': 'false' }) => Object.assign(new Error('SYNTHETIC-SECRET'), {
+    name: 'AI_APICallError', statusCode: 429, responseHeaders: headers, responseBody: JSON.stringify({ error: { code, message: 'SYNTHETIC-SECRET' } }) })
+  expect(collectorGatewayFailure(refused('rate_limited'), 'gpt-6-luna')).toEqual({ gateway_error_code: 'rate_limited', upstream_attempted: false, gateway_request_id: REQUEST_ID })
+  expect(collectorGatewayFailure(Object.assign(new Error('retry'), { lastError: refused('monthly_budget_exhausted') }), 'gpt-6-luna')).toMatchObject({ gateway_error_code: 'monthly_budget_exhausted' })
+  // The gateway could not reach the model at all (seen in the hospital on 2026-11-26 as HTTP 502 in under a second).
+  expect(collectorGatewayFailure(refused('provider_unavailable', { 'x-request-id': REQUEST_ID, 'x-upstream-attempted': 'true' }), 'gpt-6-luna'))
+    .toEqual({ gateway_error_code: 'provider_unavailable', upstream_attempted: true, gateway_request_id: REQUEST_ID })
+  expect(collectorGatewayFailure(refused('unsupported_api_for_model'), 'gpt-6-luna')).toMatchObject({ gateway_error_code: 'unsupported_api_for_model' })
+  // A code outside the contract's list is 'other'; malformed headers are left out rather than sent.
+  expect(collectorGatewayFailure(refused('SYNTHETIC-SECRET', { 'x-request-id': 'SYNTHETIC-SECRET', 'x-upstream-attempted': 'maybe' }), 'gpt-6-luna')).toEqual({ gateway_error_code: 'other' })
+  expect(collectorGatewayFailure(refused('provider_error', { 'x-upstream-attempted': 'true' }), 'gpt-6-luna')).toEqual({ gateway_error_code: 'provider_error', upstream_attempted: true })
+  // Other models, non-JSON bodies without headers, and failures without an HTTP response report nothing.
+  expect(collectorGatewayFailure(refused('rate_limited'), 'tvghbrain3.5')).toBeUndefined()
+  expect(collectorGatewayFailure(Object.assign(new Error('x'), { statusCode: 502, responseBody: '<html>SYNTHETIC-SECRET</html>' }), 'gpt-6-luna')).toBeUndefined()
+  for (const error of [new TypeError('Failed to fetch'), new Error('請先登入'), null, 'SYNTHETIC-SECRET']) expect(collectorGatewayFailure(error, 'gpt-6-luna')).toBeUndefined()
+
+  const error = refused('rate_limited')
+  beginCollectorObservation({ feature: 'summary', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' })
+    .finish({ outcome: collectorError(error), phase: 'stream', responseComplete: false, httpStatus: collectorHttpStatus(error), gateway: collectorGatewayFailure(error, 'gpt-6-luna') })
+  await settle()
+  expect(body()).toMatchObject({ schema_version: 12, status: 'error', diagnostics: { http_status: 429, gateway_error_code: 'rate_limited', upstream_attempted: false, gateway_request_id: REQUEST_ID } })
+  expect(JSON.stringify(body())).not.toContain('SYNTHETIC-SECRET')
+  expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
+  // A completed request never carries a gateway failure, so a stray one cannot cost the event.
+  jest.mocked(fetch).mockClear()
+  beginCollectorObservation({ feature: 'summary', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' })
+    .finish({ outcome: 'ok', phase: 'stream', responseComplete: true, gateway: { gateway_error_code: 'rate_limited' } })
+  await settle()
+  expect(body().status).toBe('completed')
+  expect(body().diagnostics.gateway_error_code).toBeUndefined()
+})
+
+test('an operation keeps the gateway failure of each request in its request details', async () => {
+  const operation = start()
+  operation.operation!.observeRequest({ feature: 'summary', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' })
+    .finish({ outcome: 'error', phase: 'stream', responseComplete: false, httpStatus: 503, gateway: { gateway_error_code: 'budget_unavailable', upstream_attempted: false } })
+  operation.finish({ outcome: 'error' })
+  await settle()
+  const sent = jest.mocked(fetch).mock.calls.map(call => JSON.parse(call[1]!.body as string)).find(event => event.sample_kind === 'feature')
+  expect(sent.diagnostics.requests.details[0]).toMatchObject({ status: 'error', http_status: 503, gateway_error_code: 'budget_unavailable', upstream_attempted: false })
+  expect(collectorEventV12Schema.safeParse(sent).success).toBe(true)
+})
+
+test('a failed AI request reports the HTTP status the service answered with and nothing else from the error', async () => {
+  const apiCall = Object.assign(new Error('SYNTHETIC-SECRET'), { name: 'AI_APICallError', statusCode: 429, responseBody: '{"error":{"code":"SYNTHETIC-SECRET"}}' })
+  expect(collectorHttpStatus(apiCall)).toBe(429)
+  expect(collectorHttpStatus(Object.assign(new Error('retry'), { lastError: apiCall, errors: [apiCall] }))).toBe(429)
+  expect(collectorHttpStatus(new Error('wrapped', { cause: Object.assign(new Error('x'), { statusCode: 503 }) }))).toBe(503)
+  // The query path throws our own AiError, which keeps the status in its context.
+  expect(collectorHttpStatus(new AiError('SYNTHETIC-SECRET', AiErrorCode.RATE_LIMIT_EXCEEDED, { modelId: 'gpt-6-luna', status: 429 }))).toBe(429)
+  expect(collectorHttpStatus(new Error('wrapped', { cause: new AiError('x', AiErrorCode.NETWORK_ERROR, { modelId: 'tvghbrain3.5', status: 502 }) }))).toBe(502)
+  // No HTTP response (network failure, missing sign-in) and malformed values report nothing.
+  for (const error of [new TypeError('Failed to fetch'), new Error('請先登入'), null, 'SYNTHETIC-SECRET',
+    new AiError('no response', AiErrorCode.NETWORK_ERROR, { modelId: 'gpt-6-luna' }), { context: { status: '429' } }, { context: null },
+    { statusCode: '429' }, { statusCode: 42 }, { statusCode: 600 }, { statusCode: 429.5 }]) {
+    expect(collectorHttpStatus(error)).toBeUndefined()
+  }
+  const cyclic: { cause?: unknown } = {}
+  cyclic.cause = cyclic
+  expect(collectorHttpStatus(cyclic)).toBeUndefined()
+
+  beginCollectorObservation({ feature: 'summary', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' })
+    .finish({ outcome: collectorError(apiCall), phase: 'stream', responseComplete: false, httpStatus: collectorHttpStatus(apiCall) })
+  await settle()
+  expect(body()).toMatchObject({ status: 'error', error_class: 'error', diagnostics: { http_status: 429 } })
+  expect(JSON.stringify(body())).not.toContain('SYNTHETIC-SECRET')
+  expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
 })
 
 test('collector failure cannot change clinical success, cache update or loading state', async () => {
@@ -321,7 +412,7 @@ test.each([[0, 6], [3, 3], [6, 0], [1, 0]])('summary terminal event measures %i/
   expect(store.getState().running.summary).toBe(false)
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body()).toMatchObject({
-    schema_version: 11, sample_kind: 'feature', status: failed ? 'error' : 'completed',
+    schema_version: 12, sample_kind: 'feature', status: failed ? 'error' : 'completed',
     error_class: failed ? 'parse_failed' : null,
     diagnostics: { summary_cards: { succeeded, failed }, phase: failed ? 'parse' : 'unknown' },
   })
@@ -367,8 +458,8 @@ test.each(['ok', 'parse_failed', 'aborted'] as const)('a summary operation names
   })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
-  expect(body()).toMatchObject({ schema_version: 11, feature: 'summary', sample_kind: 'feature', diagnostics: { summary_run_id: SYNTHETIC_RUN } })
-  expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
+  expect(body()).toMatchObject({ schema_version: 12, feature: 'summary', sample_kind: 'feature', diagnostics: { summary_run_id: SYNTHETIC_RUN } })
+  expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
 })
 
 test('operations without a run, and non-summary features, are v6 operation events without summary_run_id', async () => {
@@ -376,13 +467,13 @@ test('operations without a run, and non-summary features, are v6 operation event
   await runGenerationJob({ store, key: 'summary', cacheKey: 'synthetic-summary',
     analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, produce: async () => ({}) })
   await settle()
-  expect(body().schema_version).toBe(11)
+  expect(body().schema_version).toBe(12)
   expect(body().diagnostics).not.toHaveProperty('summary_run_id')
   await runGenerationJob({ store, key: 'insights', cacheKey: 'synthetic-insights',
     analytics: { surface: 'insights', modelId: 'gpt-5.4-nano' },
     produce: async (_measure, identifySummaryRun) => { identifySummaryRun(SYNTHETIC_RUN); return {} } })
   await settle()
-  expect(body()).toMatchObject({ schema_version: 11, feature: 'insights' })
+  expect(body()).toMatchObject({ schema_version: 12, feature: 'insights' })
   expect(body().diagnostics).not.toHaveProperty('summary_run_id')
 })
 
@@ -456,7 +547,7 @@ test('automatic collection uses a persistent browser ID, never storing credentia
   expect(JSON.stringify(localStorage)).not.toContain(TOKEN)
   for (const key of ['user_id', 'email', 'source_ip', 'room', 'receipt']) {
     expect(body()).not.toHaveProperty(key)
-    expect(collectorEventV11Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
+    expect(collectorEventV12Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
   }
   localStorage.clear()
   start().finish({ outcome: 'ok' })
@@ -546,7 +637,7 @@ test('the intranet Azure Luna keeps its name when the service reports a dated re
     beginCollectorObservation({ feature: 'chat', modelId: 'gpt-6-luna', provider: 'openai', sampleKind: 'request', mode: 'stream' })
       .finish({ outcome: 'ok', ...(reported ? { modelId: reported, modelSource: 'reported' as const } : {}) })
     await settle()
-    expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
+    expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
     return body()
   }
   expect(await run()).toMatchObject({ model: 'gpt-6-luna', provider: 'openai', model_source: 'configured' })
