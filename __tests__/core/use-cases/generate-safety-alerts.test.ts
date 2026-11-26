@@ -241,13 +241,29 @@ describe('GenerateSafetyAlertsUseCase', () => {
       ).toBeNull()
     })
 
-    it('parses only a complete independently delimited Safety block', () => {
+    it('reads a finished Safety block whose closing marker is missing or miswritten', () => {
+      const alert = { severity: 'medium', title: 'SYNTHETIC-TITLE', detail: 'SYNTHETIC-DETAIL' }
+      const body = JSON.stringify({ scannedCount: 1, alerts: [alert] })
+      const start = '<<<MEDIPRISMA_MODULE:safety>>>'
+      // The reply the hospital Luna produced on 2026-11-26 (synthetic patient).
+      const miswritten = `${start}\n${body}\n<<<END_OF_MEDIPRISMA_MODULE:safety>>`
+      expect(generateSafetyAlertsUseCase.hasCompleteBatchModuleBlock(miswritten)).toBe(false)
+      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(miswritten)?.alerts).toHaveLength(1)
+      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(`${start}\n${body}`)?.alerts).toHaveLength(1)
+      // A following block is not read as part of this one.
+      const followed = `${start}\n${body}\n<<<MEDIPRISMA_MODULE:overview>>>{"alerts":[]}<<<END_MEDIPRISMA_MODULE:overview>>>`
+      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(followed)?.alerts).toHaveLength(1)
+      // A reply cut off inside the object is still a failure, never a shorter alert list.
+      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(`${start}\n${body.slice(0, -1)}`)).toBeNull()
+      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(`${start}\n${body.slice(0, body.indexOf('SYNTHETIC-DETAIL'))}`)).toBeNull()
+    })
+
+    it('parses a complete independently delimited Safety block', () => {
       const openBlock = [
         '<<<MEDIPRISMA_MODULE:safety>>>',
         '{"scannedCount":1,"alerts":[]}',
       ].join('\n')
       expect(generateSafetyAlertsUseCase.hasCompleteBatchModuleBlock(openBlock)).toBe(false)
-      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(openBlock)).toBeNull()
 
       const completeBlock = `${openBlock}\n<<<END_MEDIPRISMA_MODULE:safety>>>`
       expect(generateSafetyAlertsUseCase.hasCompleteBatchModuleBlock(completeBlock)).toBe(true)
