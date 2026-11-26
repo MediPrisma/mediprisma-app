@@ -441,8 +441,10 @@ export const hospitalCaptureEventSchema = z.object({
   // built on (not the same patient, too old to add to, or HIS could not say what is newer).
   // held_resources: resources in the held record; newer_resources: resources read from HIS to lay over it;
   // since_days: how many days back that reading started.
+  // D096: signed_out = this browser is not signed in to the outpatient assistant, so no record could be asked for.
+  // Extensions before v0.17.14 report that case as none.
   stored_record: z.object({
-    outcome: z.enum(['used', 'none', 'timeout', 'failed', 'unusable']),
+    outcome: z.enum(['used', 'none', 'timeout', 'failed', 'unusable', 'signed_out']),
     held_resources: captureCount.optional(), newer_resources: captureCount.optional(),
     since_days: z.number().int().min(0).max(400).optional(),
   }).strict().optional(),

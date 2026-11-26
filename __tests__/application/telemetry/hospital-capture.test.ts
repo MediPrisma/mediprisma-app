@@ -191,6 +191,8 @@ test('D093: how the capture used the stored record and how long each part took r
   const timed = summarizeHospitalCapture(oneClick([measure('prelude_ms:4000'), measure('capture_ms:9000')]))
   expect(timed).toMatchObject({ stageMs: { prelude: 4000, capture: 9000 } })
   expect(timed).not.toHaveProperty('storedRecord')
+  // D096: nobody signed in to the outpatient assistant is told as such, not dropped.
+  expect(summarizeHospitalCapture(oneClick([{ system: STORED, code: 'signed_out' }]))?.storedRecord).toEqual({ outcome: 'signed_out' })
   // An outcome the contract does not know, or said twice, is not sent; a size out of range leaves the outcome alone.
   for (const bad of [[{ system: STORED, code: 'maybe' }], [{ system: STORED, code: 'used' }, { system: STORED, code: 'none' }]])
     expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('storedRecord')
