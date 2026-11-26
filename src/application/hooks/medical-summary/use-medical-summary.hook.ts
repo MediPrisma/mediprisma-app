@@ -712,17 +712,22 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       }
 
       await runAttempt(1, laneCards)
-      if (ctx.modelId === 'gpt-6-luna') return outcomes
+      // The hospital Luna draws on a shared monthly budget. A request that
+      // failed in transport is never sent again from here: a lost response may
+      // already be billed, and the gateway resends a connection failure itself.
+      // A reply that arrived but did not parse is asked for once more, for the
+      // failed cards only; without it one malformed reply is a missing card.
+      const hospitalLuna = ctx.modelId === 'gpt-6-luna'
+      const maxAttempts = hospitalLuna ? 2 : MAX_CARD_BATCH_ATTEMPTS
       // Retry every remaining failed card in ONE progressively smaller batch.
       // Successful cards remain visible and are never regenerated. Attempts are
       // capped at three total calls per lane (initial + two combined retries).
-      for (let attempt = 2; attempt <= MAX_CARD_BATCH_ATTEMPTS; attempt += 1) {
+      for (let attempt = 2; attempt <= maxAttempts; attempt += 1) {
         const cardsToRetry = laneCards
           .filter((card) => {
             const outcome = outcomes.get(card.id)
-            return !outcome || outcome.status === 'rejected' || (
-              outcome.status === 'fulfilled' && 'error' in outcome.value
-            )
+            const parseFailed = outcome?.status === 'fulfilled' && 'error' in outcome.value
+            return hospitalLuna ? parseFailed : !outcome || outcome.status === 'rejected' || parseFailed
           })
           // Overview first on every retry too: it is the section the user is
           // looking at while the rest is still being rewritten.
