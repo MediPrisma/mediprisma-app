@@ -15,3 +15,4 @@ export async function awaitReportStep<T>(step: Promise<T>, signal: AbortSignal):
   try { return await Promise.race([step, cancelled]) }
   finally { signal.removeEventListener('abort', abort) }
 }
+export { sendSummaryFailureReport } from '@/src/infrastructure/telemetry/ai-failure-report'

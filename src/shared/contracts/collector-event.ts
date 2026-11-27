@@ -465,12 +465,16 @@ export const hospitalCaptureEventSchema = z.object({
 })
 export type HospitalCaptureEvent = z.infer<typeof hospitalCaptureEventSchema>
 
-// Separate, explicitly consented sensitive-content endpoint; never accepted by
-// /events. Prompt includes the clinical context actually sent to the model.
+// Separate sensitive-content endpoint; never accepted by /events. Prompt includes
+// the clinical context actually sent to the model. source: manual = the user
+// previewed and consented in 回報問題; auto_failure = the 北榮 entry (?site=vghtpe)
+// sent a summary run that failed twice, by hospital policy without a per-report
+// prompt (D097). Absent means manual, as from senders before D097.
 export const AI_REPORT_MAX_BODY_BYTES = 8 * 1024 * 1024
 export const aiReportSchema = z.object({
   schema_version: z.literal(1), submission_id: z.string().uuid(),
   consent: z.literal(true), created_at: z.string().datetime(),
+  source: z.enum(['manual', 'auto_failure']).optional(),
   executions: z.array(z.object({
     timestamp: z.string().datetime(), status: z.enum(['completed', 'error', 'aborted']),
     // Optional for existing v1 records; new senders always populate this.
