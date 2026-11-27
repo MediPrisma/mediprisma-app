@@ -1,7 +1,8 @@
 // The header's one menu: account state and usage on top, the less-used
 // header controls (passed in as `menuItems`) below. The trigger shows only
-// who is using the app — a spinner while the session restores, 登入 / 訪客
-// before sign-in, a person icon after.
+// who is using the app — a spinner while the session restores, 訪客 for a
+// free-tier visitor, otherwise an icon. It never reads 登入: it opens a menu,
+// and 登入 is that menu's first entry.
 'use client'
 
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -48,11 +49,9 @@ function MiniUsageRow({ label, used, limit }: { label: string; used: number; lim
 export interface HeaderAuthButtonProps {
   /** Menu entries below the account section (import, tours, audience …). */
   menuItems?: ReactNode
-  /** Overlaid on the trigger, e.g. the unseen-news dot. */
-  triggerBadge?: ReactNode
 }
 
-export function HeaderAuthButton({ menuItems, triggerBadge }: HeaderAuthButtonProps = {}) {
+export function HeaderAuthButton({ menuItems }: HeaderAuthButtonProps = {}) {
   const { t } = useLanguage()
   const {
     user,
@@ -98,18 +97,13 @@ export function HeaderAuthButton({ menuItems, triggerBadge }: HeaderAuthButtonPr
             variant="outline"
             size="sm"
             data-tour="header-more"
-            className="relative h-9 w-auto gap-1.5 px-2.5 shadow-none hover:shadow-none max-md:h-[44px] max-md:min-w-[44px]"
+            className="h-9 w-auto gap-1.5 px-2.5 shadow-none hover:shadow-none max-md:h-[44px] max-md:min-w-[44px]"
             aria-label={label}
             title={label}
           >
             <Icon className={`h-4 w-4 ${restoring ? 'animate-spin' : ''}`} aria-hidden="true" />
-            {/* A name would only repeat what the menu says; before sign-in
-                the word is the invitation, so it stays where there is room. */}
-            {!restoring && !signedIn && (
-              <span className="max-md:hidden @max-[72rem]:hidden">{label}</span>
-            )}
+            {guest && <span className="max-md:hidden @max-[72rem]:hidden">{label}</span>}
             <ChevronDown className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
-            {triggerBadge}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">

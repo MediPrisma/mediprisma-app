@@ -6,19 +6,6 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useGuidedTourStore } from './guided-tour.store'
 import { useUnseenNews } from './use-unseen-news'
 
-/** The dot on the header menu's trigger while a tour-hub news item is unseen. */
-export function TourHubNewsDot() {
-  const { locale } = useLanguage()
-  const count = useUnseenNews().length
-  if (count === 0) return null
-  return (
-    <>
-      <span aria-hidden="true" className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
-      <span className="sr-only">{locale === 'en' ? `${count} new` : `${count} 項新功能`}</span>
-    </>
-  )
-}
-
 /** The entry to the tour hub, inside the header menu. */
 export function TourHubMenuItem({ disabled = false }: { disabled?: boolean }) {
   const { locale } = useLanguage()

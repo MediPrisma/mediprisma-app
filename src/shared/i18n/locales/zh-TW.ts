@@ -3133,6 +3133,7 @@ export const zhTW = {
     medical: '醫療人員',
     patient: '民眾',
     switcherLabel: '使用身份',
+    backToMedical: '切回醫療人員',
     onboarding: {
       title: '請問您的使用身份是？',
       description: '身份會影響藥名、檢驗名稱、臨床代碼與 AI 回覆方式。之後可隨時從右上角選單切換。',

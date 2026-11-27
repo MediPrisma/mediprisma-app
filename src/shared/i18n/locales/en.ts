@@ -3124,6 +3124,7 @@ export const en = {
     medical: 'Medical professional',
     patient: 'Patient / Citizen',
     switcherLabel: 'Audience',
+    backToMedical: 'Back to clinician view',
     onboarding: {
       title: 'Which best describes you?',
       description: 'Your choice affects medication names, test labels, clinical codes, and AI response style. You can switch any time from the top-right menu.',

@@ -1,6 +1,6 @@
 export { GuidedTourOverlay } from './GuidedTourOverlay'
 export { TourHub, launchGuidedTour } from './TourHub'
-export { TourHubMenuItem, TourHubNewsDot } from './TourHubMenuItem'
+export { TourHubMenuItem } from './TourHubMenuItem'
 export { FirstRunTourOffer } from './FirstRunTourOffer'
 export { WhatsNewHint } from './WhatsNewHint'
 export { useGuidedTourStore } from './guided-tour.store'

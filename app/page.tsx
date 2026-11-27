@@ -37,7 +37,6 @@ import {
   GuidedTourOverlay,
   TourHub,
   TourHubMenuItem,
-  TourHubNewsDot,
   WhatsNewHint,
   useGuidedTourStore,
 } from "@/features/guided-tour"
@@ -639,7 +638,6 @@ function PageContent() {
             <PatientAudienceBadge />
             <ImportBundleButton ref={importRef} badgesOnly />
             <HeaderAuthButton
-              triggerBadge={<TourHubNewsDot />}
               menuItems={
                 <HeaderMenuItems
                   importMenu={

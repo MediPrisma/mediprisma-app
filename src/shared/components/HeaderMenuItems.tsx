@@ -11,6 +11,7 @@ import {
   Stethoscope,
   User as UserIcon,
   Languages,
+  X,
 } from 'lucide-react'
 import {
   DropdownMenuItem,
@@ -96,18 +97,23 @@ export function HeaderMenuItems({
 }
 
 /** Shown in the header only while the app is in the non-default 民眾 view,
- *  so a clinician is never in it without knowing. */
+ *  so a clinician is never in it without knowing; one click goes back (the
+ *  same shape as the 示範資料 badge). */
 export function PatientAudienceBadge() {
   const { t } = useLanguage()
-  const { audience } = useAudience()
+  const { audience, setAudience } = useAudience()
   if (audience !== 'patient') return null
   return (
-    <span
-      title={t.audience.switcherLabel}
-      className="flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-1 dark:ring-inset dark:ring-sky-500/25"
+    <button
+      type="button"
+      onClick={() => setAudience('medical')}
+      title={t.audience.backToMedical}
+      aria-label={t.audience.backToMedical}
+      className="group flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-sky-500/10 dark:text-sky-300 dark:ring-1 dark:ring-inset dark:ring-sky-500/25 dark:hover:bg-sky-500/15 max-md:h-[44px] max-md:rounded-md max-md:px-2.5"
     >
       <UserIcon className="h-3 w-3" aria-hidden="true" />
       {t.audience.patient}
-    </span>
+      <X className="h-3 w-3 opacity-60 transition-opacity group-hover:opacity-100" aria-hidden="true" />
+    </button>
   )
 }

@@ -55,10 +55,10 @@ describe('HeaderAuthButton', () => {
     expect(screen.queryByText('登入')).not.toBeInTheDocument()
   })
 
-  it('names the signed-out trigger 登入, and shows only an icon once signed in', () => {
+  it('shows only an icon signed out and signed in: 登入 is an entry of the menu it opens', () => {
     auth({ loading: false })
     const { unmount } = render(<HeaderAuthButton />)
-    expect(screen.getByRole('button', { name: '登入' })).toHaveTextContent('登入')
+    expect(screen.getByRole('button', { name: '登入' })).toHaveTextContent('')
     unmount()
 
     auth({ loading: false, user: { displayName: '測試醫師', email: 'doctor@synthetic.invalid' } as never })
