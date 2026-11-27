@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
-import { optionalBuildConfig, writeOptionalBuildTsconfig } from "./scripts/optional-build-config.mjs";
+import { assertConfiguredPackages, optionalBuildConfig, writeOptionalBuildTsconfig } from "./scripts/optional-build-config.mjs";
 import { execFileSync } from 'node:child_process';
 import { resolveAppVersion, writeVersionFile } from './scripts/app-version.mjs';
 
@@ -34,6 +34,7 @@ const isWorktree = __dirname.includes('.claude/worktrees/');
 const projectRoot = isWorktree ? path.join(__dirname, '../../..') : __dirname;
 
 const optional = optionalBuildConfig(__dirname);
+assertConfiguredPackages(optional);
 const buildTsconfig = writeOptionalBuildTsconfig(__dirname, optional);
 
 const nextConfig: NextConfig = {

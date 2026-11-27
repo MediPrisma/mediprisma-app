@@ -108,6 +108,7 @@
     "typescript": "^6.0.3"
   },
   "optionalDependencies": {
+    "@mediprisma/vghtpe-ddi-check": "0.1.0",
     "@voho0000/clinical-lab-normalization": "1.5.0",
     "@voho0000/personalization-sdk": "1.0.0",
     "@voho0000/personalized-care": "2.31.1",

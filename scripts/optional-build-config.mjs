@@ -34,11 +34,28 @@ export function optionalBuildConfig(root, options = {}) {
     fallback('@/features/personalized-education/LiveFeature', 'unavailable-education.tsx')
     excluded.push('features/personalized-education/**')
   }
+  // Without the check package the interaction check is off (see
+  // assertConfiguredPackages); the stand-in only lets the app compile.
+  if (!state.ddi) fallback('@mediprisma/vghtpe-ddi-check', 'ddi-check.ts')
   if (!sdkImport) fallback('@/vendor/nhi-fhir-bridge-sdk-json/browser.js', 'sdk-json.ts')
   return { aliases, excluded, env: {
     NEXT_PUBLIC_CDSS_AVAILABLE: String(state.care),
     NEXT_PUBLIC_SDK_IMPORT_AVAILABLE: String(sdkImport),
+    NEXT_PUBLIC_DDI_CHECK_AVAILABLE: String(state.ddi),
   } }
+}
+
+/** A build configured for a private feature must have its package: never
+ *  ship the feature silently switched off. */
+export function assertConfiguredPackages(config, env = process.env) {
+  if (env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN && config.env.NEXT_PUBLIC_DDI_CHECK_AVAILABLE !== 'true') {
+    throw new Error(
+      'NEXT_PUBLIC_DDI_SERVICE_ORIGIN is set, but @mediprisma/vghtpe-ddi-check is not installed, ' +
+      'so this build would have no drug-interaction check. Install with a NODE_AUTH_TOKEN that can ' +
+      'read @mediprisma packages on GitHub Packages (read:packages), e.g. ' +
+      'NODE_AUTH_TOKEN="$(gh auth token)" npm ci, or unset NEXT_PUBLIC_DDI_SERVICE_ORIGIN.',
+    )
+  }
 }
 
 export function writeOptionalBuildTsconfig(root, config) {

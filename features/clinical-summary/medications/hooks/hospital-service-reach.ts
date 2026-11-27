@@ -2,7 +2,14 @@
 // page cannot see that it is on the hospital network; reaching the service is
 // the one reliable sign, so the 安全 tab can appear even when the patient has
 // fewer than two drugs to check or only cloud (NHI) medications.
+import { DDI_CHECK_AVAILABLE } from '@/src/shared/config/optional-capabilities'
 import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
+
+/** The hospital interaction service, or '' when this build has no check: no
+ *  service configured, or the check package not installed. */
+export function ddiServiceOrigin(): string {
+  return DDI_CHECK_AVAILABLE ? process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN ?? '' : ''
+}
 
 const TIMEOUT_MS = 8000
 const PERMISSION_PROMPT_TIMEOUT_MS = 60_000
