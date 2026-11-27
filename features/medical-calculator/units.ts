@@ -81,6 +81,8 @@ const FACTORS: Record<ConvertDim, Record<string, number>> = {
   hemoglobin: { 'g/dl': 1, 'g/l': 0.1, 'mmol/l': 1.6113 },
   // Serum iron, TIBC, UIBC: base µg/dL. 1 µmol/L = 5.585 µg/dL (Fe 55.85 g/mol).
   iron: { 'ug/dl': 1, 'mcg/dl': 1, 'umol/l': 5.585 },
+  // Red cell count: base 10⁶/µL ≡ 10¹²/L ≡ M/µL. Raw /µL is ÷10⁶.
+  rbc: { '10^6/ul': 1, '10^12/l': 1, 'm/ul': 1, 'mil/ul': 1, 'million/ul': 1, '10^6/mm^3': 1, '/ul': 1e-6 },
   // FiO₂: base %. A fraction (0.21) → percent (21%); unit "1" or "fraction".
   fio2: { '%': 1, '1': 100, fraction: 100 },
   // ECG interval: base ms. UCUM 「s」 is seconds.

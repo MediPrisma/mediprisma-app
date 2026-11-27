@@ -929,11 +929,16 @@ describe('Transferrin saturation (TSAT)', () => {
     expect(high!.value).toBe('60')
     expect(high!.interpretation!.zh).toContain('鐵過載')
   })
-  it('builds TIBC from UIBC when the lab reports no TIBC, and prefers a reported TIBC', () => {
-    const r = run('tsat', { iron: '50', tibc: '', uibc: '200' })
-    expect(r!.value).toBe('20')
-    expect(r!.extra).toContainEqual({ label: { en: 'TIBC (iron + UIBC)', zh: 'TIBC（Fe＋UIBC）' }, value: '250 µg/dL' })
-    expect(run('tsat', { iron: '50', tibc: '500', uibc: '200' })!.value).toBe('10')
+  // Auto-review round 1: thresholds read the unrounded value, never the displayed one.
+  it('reads a value just under 20% as deficient, and just over 45% as high', () => {
+    const low = run('tsat', { iron: '67', tibc: '335.5', ferritin: '200' })
+    expect(low!.value).toBe('19.97')
+    expect(low!.interpretation!.zh).toContain('偏低')
+    expect(low!.extra![0].value).toBe('✓ ferritin 200')
+    const high = run('tsat', { iron: '149', tibc: '331' })
+    expect(high!.value).toBe('45.02')
+    expect(high!.interpretation!.zh).toContain('偏高')
+    expect(run('tsat', { iron: '60.1', tibc: '300' })!.interpretation!.zh).toContain('一般範圍')
   })
   it('marks the older heart-failure definition when ferritin is given', () => {
     const row = (values: CalcValues) => run('tsat', values)!.extra!.find((e) => e.label.en.startsWith('Older HF definition'))?.value
@@ -977,6 +982,12 @@ describe('Mentzer index', () => {
     const r = run('mentzer-index', { mcv: '70', rbc: '3.8' })
     expect(r!.value).toBe('18.4')
     expect(r!.interpretation!.zh).toContain('缺鐵')
+  })
+  it('reads the unrounded index beside 13', () => {
+    const r = run('mentzer-index', { mcv: '65', rbc: '5.01' })
+    expect(r!.value).toBe('12.97')
+    expect(r!.interpretation!.zh).toContain('地中海型貧血')
+    expect(run('mentzer-index', { mcv: '65', rbc: '5' })!.interpretation!.zh).toContain('無法區分')
   })
   it('gives no result without both values', () => {
     expect(run('mentzer-index', { mcv: '70', rbc: '' })).toBeNull()

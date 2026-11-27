@@ -1,6 +1,12 @@
 import type { CalculatorDef, L } from '../types'
 import { n, round, WEIGHT_LOINC } from './_shared'
 
+/** One decimal, with a second where the first would round onto a threshold (19.97 is not shown as 「20」). */
+function tsatDisplay(tsat: number): string {
+  const shown = round(tsat, 1)
+  return (shown === 20 && tsat !== 20) || (shown === 45 && tsat !== 45) ? String(round(tsat, 2)) : String(shown)
+}
+
 export const HEME: CalculatorDef[] = [
   // ── Absolute neutrophil count ───────────────────────────────────────────
     {
@@ -64,39 +70,34 @@ export const HEME: CalculatorDef[] = [
       blurb: { en: 'Serum iron ÷ TIBC; iron deficiency and overload.', zh: '血清鐵 ÷ TIBC；評估缺鐵與鐵過載。' },
       inputs: [
         { key: 'iron', type: 'number', label: { en: 'Serum iron', zh: '血清鐵 (Fe)' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 60, high: 170 }, source: { kind: 'lab', keys: ['IRON'] } },
-        { key: 'tibc', type: 'number', label: { en: 'TIBC', zh: '總鐵結合能力 (TIBC)' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 250, high: 450 }, source: { kind: 'lab', keys: ['TIBC'] } },
-        { key: 'uibc', type: 'number', label: { en: 'UIBC (when TIBC is not reported)', zh: 'UIBC（沒有 TIBC 時填）' }, unit: 'µg/dL', dimension: 'iron', optional: true, source: { kind: 'labLoinc', loinc: ['2501-5'] } },
+        // Filled from the record's TIBC, else the same day's serum iron + UIBC.
+        { key: 'tibc', type: 'number', label: { en: 'TIBC (or serum iron + UIBC)', zh: '總鐵結合能力 (TIBC)（或 Fe＋UIBC）' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 250, high: 450 }, source: { kind: 'tibc' } },
         { key: 'ferritin', type: 'number', label: { en: 'Ferritin (optional)', zh: 'Ferritin（選填）' }, unit: 'ng/mL', optional: true, source: { kind: 'lab', keys: ['FERRITIN'] } },
       ],
       compute: (v) => {
-        const iron = n(v, 'iron'); const uibc = n(v, 'uibc'); const ferritin = n(v, 'ferritin')
-        const measuredTibc = n(v, 'tibc')
-        if (iron === undefined || iron < 0) return null
-        // TIBC = serum iron + UIBC, for a lab that reports UIBC in its place.
-        const tibc = measuredTibc ?? (uibc === undefined ? undefined : iron + uibc)
-        if (tibc === undefined || tibc <= 0) return null
+        const iron = n(v, 'iron'); const tibc = n(v, 'tibc'); const ferritin = n(v, 'ferritin')
+        if (iron === undefined || iron < 0 || tibc === undefined || tibc <= 0) return null
+        // Thresholds read the unrounded value; rounding is for display only.
         const tsat = (iron / tibc) * 100
-        const val = round(tsat, 1)
         let interp: L; let severity: 'normal' | 'moderate'
-        if (val < 20) { interp = { en: '< 20% — low: iron deficiency (the ESC 2026 definition in heart failure)', zh: '< 20% — 偏低：缺鐵（ESC 2026 心衰竭以此定義缺鐵）' }; severity = 'moderate' }
-        else if (val <= 45) { interp = { en: '20–45% — within the usual range', zh: '20–45% — 一般範圍' }; severity = 'normal' }
+        if (tsat < 20) { interp = { en: '< 20% — low: iron deficiency (the ESC 2026 definition in heart failure)', zh: '< 20% — 偏低：缺鐵（ESC 2026 心衰竭以此定義缺鐵）' }; severity = 'moderate' }
+        else if (tsat <= 45) { interp = { en: '20–45% — within the usual range', zh: '20–45% — 一般範圍' }; severity = 'normal' }
         else { interp = { en: '> 45% — high: consider iron overload; repeat fasting', zh: '> 45% — 偏高：考慮鐵過載，建議空腹複驗' }; severity = 'moderate' }
         const extra: { label: L; value: string }[] = []
-        if (measuredTibc === undefined) extra.push({ label: { en: 'TIBC (iron + UIBC)', zh: 'TIBC（Fe＋UIBC）' }, value: `${round(tibc, 0)} µg/dL` })
         if (ferritin !== undefined) {
           // ESC 2021: ferritin < 100 ng/mL, or 100–299 ng/mL with TSAT < 20%.
-          const met = ferritin < 100 || (ferritin < 300 && val < 20)
+          const met = ferritin < 100 || (ferritin < 300 && tsat < 20)
           extra.push({
             label: { en: 'Older HF definition (ESC 2021: ferritin < 100, or 100–299 with TSAT < 20%)', zh: '心衰竭舊定義（ESC 2021：ferritin < 100，或 100–299 且 TSAT < 20%）' },
             value: `${met ? '✓' : '✗'} ferritin ${ferritin}`,
           })
         }
         return {
-          numericValue: tsat, value: String(val), unit: '%', interpretation: interp, severity, extra,
+          numericValue: tsat, value: tsatDisplay(tsat), unit: '%', interpretation: interp, severity, extra,
           ...(tsat > 100 ? { notes: { en: 'Serum iron exceeds TIBC: check the values and their units.', zh: '血清鐵大於 TIBC：請核對數值與單位。' } } : {}),
         }
       },
-      coherence: { keys: ['iron', 'tibc', 'uibc'], windowDays: 0 },
+      coherence: { keys: ['iron', 'tibc'], windowDays: 0 },
       reference: 'TSAT (%) = serum iron / TIBC × 100; TIBC = serum iron + UIBC. ESC 2026 heart failure guideline §10.4: iron deficiency is TSAT < 20%.',
     },
 
@@ -145,18 +146,19 @@ export const HEME: CalculatorDef[] = [
       blurb: { en: 'Microcytic anemia: iron deficiency or thalassemia trait.', zh: '小球性貧血：缺鐵或地中海型貧血帶因。' },
       inputs: [
         { key: 'mcv', type: 'number', label: { en: 'MCV', zh: '平均紅血球容積 (MCV)' }, unit: 'fL', normalRange: { low: 80, high: 100 }, source: { kind: 'lab', keys: ['MCV'] } },
-        { key: 'rbc', type: 'number', label: { en: 'RBC count', zh: '紅血球數 (RBC)' }, unit: '10⁶/µL', normalRange: { low: 4, high: 5.5 }, source: { kind: 'lab', keys: ['RBC'] } },
+        { key: 'rbc', type: 'number', label: { en: 'RBC count', zh: '紅血球數 (RBC)' }, unit: '10⁶/µL', dimension: 'rbc', normalRange: { low: 4, high: 5.5 }, source: { kind: 'lab', keys: ['RBC'] } },
       ],
       compute: (v) => {
         const mcv = n(v, 'mcv'); const rbc = n(v, 'rbc')
         if (mcv === undefined || rbc === undefined || mcv <= 0 || rbc <= 0) return null
         const index = mcv / rbc
-        const val = round(index, 1)
-        const interp: L = val < 13
+        // The threshold reads the unrounded index; a value that rounds to 13 is shown with one more decimal.
+        const interp: L = index < 13
           ? { en: '< 13 — thalassemia trait more likely', zh: '< 13 — 較像地中海型貧血帶因' }
-          : val > 13
+          : index > 13
             ? { en: '> 13 — iron deficiency more likely', zh: '> 13 — 較像缺鐵性貧血' }
             : { en: '13 — indeterminate', zh: '13 — 無法區分' }
+        const val = index !== 13 && round(index, 1) === 13 ? round(index, 2) : round(index, 1)
         return { numericValue: index, value: String(val), interpretation: interp, severity: 'normal' }
       },
       coherence: { keys: ['mcv', 'rbc'], windowDays: 0 },

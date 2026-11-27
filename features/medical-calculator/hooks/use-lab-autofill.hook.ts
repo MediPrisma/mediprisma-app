@@ -274,6 +274,17 @@ export function buildAutofill(
         // One decimal, as BMI is reported — not 32.847300112161506.
         return { ...weight, value: Math.round((kg / (cm / 100) ** 2) * 10) / 10, unit: 'kg/m²', testName: 'BMI（同日身高與體重）' }
       }
+      case 'tibc': {
+        const direct = bySpecimen['blood|TIBC'] ?? byNonUrine.TIBC
+        if (direct) return direct
+        const iron = bySpecimen['blood|IRON'] ?? byNonUrine.IRON
+        const uibc = byLoinc['2501-5']
+        if (!iron || !uibc || !iron.date || iron.date.slice(0, 10) !== uibc.date.slice(0, 10)) return undefined
+        const fe = convertToBase(iron.value, iron.unit, 'iron')?.value
+        const unbound = convertToBase(uibc.value, uibc.unit, 'iron')?.value
+        if (fe === undefined || unbound === undefined || fe < 0 || unbound < 0) return undefined
+        return { ...uibc, value: Math.round((fe + unbound) * 10) / 10, unit: 'µg/dL', testName: 'TIBC（同日 Fe＋UIBC）' }
+      }
       case 'lab':
         // Prefer a blood-specimen match so a serum analyte never picks up a
         // same-named urine value (urine Na also canonicalises to NA); fall

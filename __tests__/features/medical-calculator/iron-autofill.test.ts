@@ -1,5 +1,5 @@
 // TSAT from the record: Taiwanese labs report serum iron and TIBC, seldom a TSAT.
-import { computeAutofilledResult, resolveInput } from '@/features/medical-calculator/autofill-compute'
+import { calcReadiness, computeAutofilledResult, resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { buildAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { convertToBase } from '@/features/medical-calculator/units'
@@ -25,6 +25,29 @@ it('converts µmol/L to µg/dL, and refuses a value in another unit matched by n
   expect(computeAutofilledResult(tsat, si)!.result.value).toBe('16.7')
   const wrong = autofill([named('Iron', 45, 'mg')])
   expect(resolveInput(tsat.inputs.find((input) => input.key === 'iron')!, wrong).filled).toBe(false)
+})
+
+const coded = (loinc: string, value: number, unit: string, date = '2026-11-01') =>
+  ({ id: `o-${loinc}`, status: 'final', effectiveDateTime: date, code: { coding: [{ system: 'http://loinc.org', code: loinc }] }, valueQuantity: { value, unit } })
+
+// Auto-review round 1: a lab that reports UIBC in TIBC's place is computed in the lists too.
+it('builds TIBC from the same day’s serum iron and UIBC, and prefers a reported TIBC', () => {
+  const data = autofill([named('Fe', 50, 'ug/dL'), coded('2501-5', 200, 'ug/dL')])
+  expect(resolveInput(tsat.inputs.find((input) => input.key === 'tibc')!, data)).toMatchObject({ value: '250', filled: true, source: { testName: 'TIBC（同日 Fe＋UIBC）' } })
+  expect(computeAutofilledResult(tsat, data)!.result.value).toBe('20')
+  expect(calcReadiness(tsat, data)).toMatchObject({ ready: true, computable: true })
+  const both = autofill([named('Fe', 50, 'ug/dL'), coded('2501-5', 200, 'ug/dL'), named('TIBC', 500, 'ug/dL')])
+  expect(computeAutofilledResult(tsat, both)!.result.value).toBe('10')
+  const otherDay = autofill([named('Fe', 50, 'ug/dL'), coded('2501-5', 200, 'ug/dL', '2026-10-01')])
+  expect(computeAutofilledResult(tsat, otherDay)).toBeNull()
+})
+
+it('takes the red cell count in its equivalent units for the Mentzer index', () => {
+  const mentzer = CALCULATORS.find((c) => c.id === 'mentzer-index')!
+  for (const unit of ['10^12/L', 'M/µL', '10^6/uL', '10⁶/µL']) {
+    const data = autofill([named('MCV', 65, 'fL'), named('RBC', 5.9, unit)])
+    expect(computeAutofilledResult(mentzer, data)!.result.value).toBe('11')
+  }
 })
 
 it('has no result while the record holds no binding capacity', () => {

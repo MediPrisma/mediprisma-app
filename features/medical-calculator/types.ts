@@ -65,6 +65,7 @@ export type ConvertDim =
   | 'osmolality'  // mOsm/kg ↔ Osm/kg
   | 'hemoglobin'  // g/dL ↔ g/L ↔ mmol/L
   | 'iron'        // serum iron / TIBC / UIBC: µg/dL ↔ µmol/L
+  | 'rbc'         // red cell count: 10⁶/µL ≡ 10¹²/L ≡ M/µL
   | 'fio2'        // % ↔ fraction (21% ↔ 0.21)
   | 'albumin-creatinine-ratio' // urine ACR: mg/g ↔ mg/mmol
   | 'duration'    // ECG intervals: ms ↔ s
@@ -88,6 +89,8 @@ export type AutofillSource =
   | { kind: 'echo'; key: import('./echo-autofill').EchoKey }
   | { kind: 'bmi' }
   | { kind: 'natriuretic'; assay: 'BNP' | 'NT-PROBNP' }
+  /** TIBC as reported, else the same day's serum iron + UIBC (a lab that reports UIBC in its place). */
+  | { kind: 'tibc' }
   | { kind: 'lab'; keys: string[] }
   /** `vital` optionally carries a semantic id enabling a display-name fallback
    *  (for FHIR that omits the vital's LOINC); the name match is unit-gated. */
