@@ -100,9 +100,12 @@ export const ECHO_CHAMBER: CalculatorDef = {
       const shown = `${fmt(value, row.dp)}${row.unit ? ` ${row.unit}` : ''}`
       if (UNGRADED.has(row.key)) { extra.push({ label: label(name), value: shown }); return }
       const result = gradeEchoMetric(row.key, value, sex)!
-      graded++
+      // A row waiting for sex is not graded yet, so it is not in the denominator.
       if (result.grade === 'needsSex') needsSex.push(row.name)
-      else if (result.grade !== 'normal') { abnormal.push(row.name); if (result.grade === 'severe') severe = true }
+      else {
+        graded++
+        if (result.grade !== 'normal') { abnormal.push(row.name); if (result.grade === 'severe') severe = true }
+      }
       extra.push({
         label: withGrade(name, GRADE[result.grade]),
         value: `${shown} (${rangeText(row.key, row.refDp, sex)})`,
@@ -129,7 +132,8 @@ export const ECHO_CHAMBER: CalculatorDef = {
       : caution
 
     const sexNote = needsSex.length ? label(`; ${needsSex.length} need sex`, `；${needsSex.length} 項需性別`) : label('')
-    const interpretation = !graded ? label('No measurement to grade', '無可分級的量測')
+    const interpretation = !graded
+      ? (needsSex.length ? label(`${needsSex.length} need sex`, `${needsSex.length} 項需性別`) : label('No measurement to grade', '無可分級的量測'))
       : abnormal.length ? label(`Outside reference: ${abnormal.join(', ')}${sexNote.en}`, `超出參考範圍：${abnormal.join('、')}${sexNote.zh}`)
       : needsSex.length ? label(`None outside reference${sexNote.en}`, `未超出參考範圍${sexNote.zh}`)
       : label('All within reference range', '皆在參考範圍內')

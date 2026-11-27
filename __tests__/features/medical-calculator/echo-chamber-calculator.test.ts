@@ -125,7 +125,10 @@ describe('echo chamber calculator', () => {
       'LAVI · 正常｜30.0 mL/m² (16–34)',
     ])
     expect(result.interpretation!.zh).toBe('超出參考範圍：RWT；2 項需性別')
-    expect(calc.compute({ lvidd: '55' })).toMatchObject({ interpretation: { zh: '未超出參考範圍；1 項需性別' }, severity: undefined })
+    // Rows waiting for sex are not in the denominator: only RWT and LAVI are graded here.
+    expect(result.value).toBe('1 / 2')
+    expect(calc.compute({ lvidd: '55' })).toMatchObject({ value: '—', interpretation: { zh: '1 項需性別' }, severity: undefined })
+    expect(calc.compute({ lvidd: '55', lavi: '30' })).toMatchObject({ value: '0 / 1', interpretation: { zh: '未超出參考範圍；1 項需性別' }, severity: undefined })
     // Agreeing references grade without sex and show both ranges.
     expect(rows({ ivsd: '12' })).toEqual(['IVSd · 高於範圍｜12.0 mm (M 6–10 / F 6–9)'])
   })
