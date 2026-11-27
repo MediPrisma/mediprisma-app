@@ -104,7 +104,7 @@ describe('echo chamber calculator', () => {
       'TR Vmax · 異常｜3.35 m/s (≤2.8)',
     ])
     expect(result.value).toBe('3 / 6')
-    expect(result.notes!.zh).toBe('缺身高或體重，LVMI、LAVI 未計算。計算與指引對照，不取代判讀醫師的臨床判斷。')
+    expect(result.notes!.zh).toBe('缺身高或體重，未算 LVMI、LAVI。計算與指引對照，不取代判讀醫師的臨床判斷。')
     expect(result.notes!.en).toMatch(/^LVMI and LAVI not calculated: height or weight missing\./)
   })
 
@@ -118,8 +118,8 @@ describe('echo chamber calculator', () => {
   test('sex blank: rows whose male and female grades differ ask for sex', () => {
     const result = calc.compute({ lvidd: '55', lavi: '30', rwt: '0.5', lvmi: '100' })!
     expect(rows({ lvidd: '55', lavi: '30', rwt: '0.5', lvmi: '100' })).toEqual([
-      'LVIDd · 需性別｜55.0 mm',
-      'LVMI · 需性別｜100.0 g/m²',
+      'LVIDd · 需性別｜55.0 mm (M 42.0–58.4 / F 37.8–52.2)',
+      'LVMI · 需性別｜100.0 g/m² (M 49–115 / F 43–95)',
       'RWT · 異常｜0.500 (≤0.42)',
       'LV 幾何型態 · 需性別｜',
       'LAVI · 正常｜30.0 mL/m² (16–34)',

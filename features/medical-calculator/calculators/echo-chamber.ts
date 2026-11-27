@@ -72,7 +72,7 @@ export const ECHO_CHAMBER: CalculatorDef = {
     echo('lavi', 'LA volume index (LAVI)', '左心房容積指數（LAVI）', 'mL/m²'),
     echo('rwt', 'Relative wall thickness (RWT)', '相對壁厚（RWT）'),
     echo('lvef', 'LVEF', '左心室射出分率（LVEF）', '%'),
-    echo('trv', 'TR peak velocity', '三尖瓣逆流峰值速度', 'm/s'),
+    echo('trv', 'TR peak velocity (TR Vmax)', '三尖瓣逆流峰值速度（TR Vmax）', 'm/s'),
   ],
   coherence: { keys: ['lvidd', 'ivsd', 'lvpwd', 'lvMass', 'laVolume', 'lvmi', 'lavi', 'rwt', 'lvef', 'trv'], windowDays: 0 },
   compute(v): CalcResult | null {
@@ -105,7 +105,7 @@ export const ECHO_CHAMBER: CalculatorDef = {
       else if (result.grade !== 'normal') { abnormal.push(row.name); if (result.grade === 'severe') severe = true }
       extra.push({
         label: withGrade(name, GRADE[result.grade]),
-        value: result.grade === 'needsSex' ? shown : `${shown} (${rangeText(row.key, row.refDp, sex)})`,
+        value: `${shown} (${rangeText(row.key, row.refDp, sex)})`,
       })
     }
     for (const row of ROWS) {
@@ -125,7 +125,7 @@ export const ECHO_CHAMBER: CalculatorDef = {
     ]
     const caution = label('Calculated against guideline references; does not replace the reading physician’s judgement.', '計算與指引對照，不取代判讀醫師的臨床判斷。')
     const notes = notIndexed.length
-      ? label(`${notIndexed.join(' and ')} not calculated: height or weight missing. ${caution.en}`, `缺身高或體重，${notIndexed.join('、')} 未計算。${caution.zh}`)
+      ? label(`${notIndexed.join(' and ')} not calculated: height or weight missing. ${caution.en}`, `缺身高或體重，未算 ${notIndexed.join('、')}。${caution.zh}`)
       : caution
 
     const sexNote = needsSex.length ? label(`; ${needsSex.length} need sex`, `；${needsSex.length} 項需性別`) : label('')
