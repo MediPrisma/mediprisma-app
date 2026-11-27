@@ -9,6 +9,7 @@ import { HEPATIC } from './hepatic'
 import { GI } from './gi'
 import { ELECTROLYTE } from './electrolyte'
 import { HFPEF } from './hfpef'
+import { ECHO_CHAMBER } from './echo-chamber'
 import { CARDIAC } from './cardiac'
 import { PREVENT, PREVENT_CVD } from './prevent'
 import { PCE } from './pce'
@@ -37,6 +38,7 @@ export const CALCULATORS: CalculatorDef[] = [
   PCE,
   SCORE2_ASIA_PACIFIC,
   ...HFPEF,
+  ECHO_CHAMBER,
   ...HEART_FAILURE_PROGNOSIS,
   ...PULMONARY,
   STOP_BANG,

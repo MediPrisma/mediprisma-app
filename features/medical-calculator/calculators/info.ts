@@ -37,6 +37,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Step E in the HFA-PEFF diagnostic workup of stable symptomatic patients with preserved EF.', zh: '穩定、有症狀且 EF 保留者之 HFA-PEFF 診斷流程 Step E。' },
     caveats: { en: 'Confirm age, sex and rhythm. Use averaged E/e′; E and both e′ values are only needed when the average ratio is not provided. Enter NT-proBNP or BNP with a confirmed assay. Missing values are unknown, not normal. Appcardio omits age and sex inputs; this implementation follows consensus-specific thresholds.', zh: '請確認年齡、性別與心律（由最近 EKG 帶入，需核對是否代表評估時心律）。E/e′ 應取平均值；若報告已有平均比值，不必再填 E 波以推算。NT-proBNP 或 BNP 擇已確認的檢驗填入。缺值不視為正常。Appcardio 未提供年齡、性別輸入，本計算機依原始共識門檻判讀。' },
   },
+  'echo-chamber': {
+    useWhen: { en: 'Grading an adult echo report’s LV, LA and TR measurements against ASE/EACVI references.', zh: '成人心超報告的左心室、左心房與 TR 量測，對照 ASE/EACVI 參考值。' },
+    caveats: { en: 'Values come from one report; check its date and method. LVMI and LAVI use the report’s index when given, else Du Bois BSA. LVEF is shown ungraded: reports give single-plane values, the reference is biplane.', zh: '數值取自同一份報告，請核對日期與量法。報告有 LVMI、LAVI 時直接採用，否則以 Du Bois BSA 推算。LVEF 只列數值不分級：報告多為單平面，參考值為雙平面。' },
+  },
   'maggic-hf': {
     useWhen: { en: 'Discussing 1- and 3-year all-cause mortality in an adult with stable chronic heart failure across the LVEF spectrum.', zh: '成人慢性心衰竭穩定期，用於討論各種 LVEF 範圍的 1 年與 3 年全因死亡率。' },
     caveats: { en: 'Not an acute-decompensation score. Use a clinically coherent stable-time-point dataset and verify medication exposure. The published lookup table covers scores 0–50; higher scores are shown without extrapolating a mortality probability.', zh: '不是急性失代償期評分。請使用同一穩定時點且彼此一致的資料，並核對實際用藥。原始機率表僅涵蓋 0–50 分；超過 50 分時只顯示分數，不外推死亡率。' },

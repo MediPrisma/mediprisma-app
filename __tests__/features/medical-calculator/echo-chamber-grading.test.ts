@@ -89,8 +89,8 @@ describe('skill fixtures through the app extractor', () => {
     expect(r.echo.trv).toBe(3.35) // √(45 / 4)
     expect(r.grade).toEqual({ lvmi: undefined, lavi: undefined, rwt: 'normal', lvef: 'severe', trv: 'abnormal', lvMass: 'above' })
     expect(r.geometry).toBeUndefined()
-    // The extractor does not expose LVIDd; the fixture's 62 mm graded directly.
-    expect(gradeEchoMetric('lvidd', 62, 'male')?.grade).toBe('above')
+    expect(r.echo.lvidd).toBe(62)
+    expect(gradeEchoMetric('lvidd', r.echo.lvidd, 'male')?.grade).toBe('above')
   })
 
   test('glued cm layout', () => {

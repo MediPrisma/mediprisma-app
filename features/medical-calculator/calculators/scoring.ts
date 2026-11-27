@@ -115,6 +115,10 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
     ],
     note: { en: 'Maximum 2 points per domain. 0–1: unlikely; 2–4: functional testing; 5–6: supports HFpEF. Missing measurements yield a conservative range, not a validated complete score. The published E/e′ 9–14 band is implemented as 9 ≤ E/e′ <15 for decimal values.', zh: '每領域取最高分，最多 2 分。0–1：可能性低；2–4：功能性檢查；5–6：支持 HFpEF。缺值顯示保守範圍，並非已驗證的完整分數。文獻 E/e′ 9–14 區間以 9 ≤ E/e′ <15 處理小數。' },
   },
+  'echo-chamber': {
+    formula: { en: 'BSA (Du Bois) = 0.007184 × weight^0.425 × height^0.725; LVMI = LV mass / BSA; LAVI = LA volume / BSA; RWT = 2 × LVPWd / LVIDd.', zh: 'BSA（Du Bois）= 0.007184 × 體重^0.425 × 身高^0.725；LVMI＝LV mass／BSA；LAVI＝LA volume／BSA；RWT＝2 × LVPWd／LVIDd。' },
+    note: { en: 'LV geometry: LVMI above normal for sex (men >115, women >95 g/m²) and RWT >0.42. Without an LV mass, the extractor estimates it with the ASE linear formula.', zh: 'LV 幾何型態：LVMI 是否超過同性別上限（男 >115、女 >95 g/m²）× RWT 是否 >0.42。報告無 LV mass 時以 ASE 線性公式估算。' },
+  },
   'maggic-hf': {
     formula: {
       en: 'MAGGIC score = LVEF points + age×LVEF points + SBP×LVEF points + BMI points + creatinine points + NYHA points + male (1) + current smoker (1) + diabetes (3) + COPD (2) + HF duration ≥18 months (2) + no beta-blocker (3) + no ACEI/ARB (1).',

@@ -43,6 +43,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'h2fpef': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
   'hfa-peff': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
+  'echo-chamber': { purpose: ['diagnosis', 'formula'], diseases: [{ en: 'LV hypertrophy', zh: '左心室肥厚' }, { en: 'Left atrial enlargement', zh: '左心房擴大' }, HEART_FAILURE] },
   'maggic-hf': { purpose: ['prognosis', 'risk'], diseases: [HEART_FAILURE] },
   'life-preserved': { purpose: ['prognosis', 'risk'], diseases: [HFPEF_DISEASE, HEART_FAILURE] },
   'map': { purpose: ['formula'], diseases: [{ en: 'Shock', zh: '休克' }, { en: 'Hypotension', zh: '低血壓' }] },
