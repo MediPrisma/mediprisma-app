@@ -66,6 +66,7 @@ export type ConvertDim =
   | 'hemoglobin'  // g/dL ↔ g/L ↔ mmol/L
   | 'iron'        // serum iron / TIBC / UIBC: µg/dL ↔ µmol/L
   | 'rbc'         // red cell count: 10⁶/µL ≡ 10¹²/L ≡ M/µL
+  | 'ferritin'    // ng/mL ≡ µg/L
   | 'fio2'        // % ↔ fraction (21% ↔ 0.21)
   | 'albumin-creatinine-ratio' // urine ACR: mg/g ↔ mg/mmol
   | 'duration'    // ECG intervals: ms ↔ s

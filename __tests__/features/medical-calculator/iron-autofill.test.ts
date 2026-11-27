@@ -60,3 +60,12 @@ it('is listed on the heart-failure page at DP-12, linked wherever a line names T
   expect(entry.source).toBeUndefined()
   expect('缺鐵（ferritin 80・TSAT 15%）：IV 鐵劑？').toMatch(entry.names)
 })
+
+// Auto-review round 2: ferritin in µg/L is the same number as ng/mL.
+it('takes ferritin in µg/L as in ng/mL', () => {
+  for (const unit of ['ng/mL', 'µg/L', 'ug/L']) {
+    const computed = computeAutofilledResult(tsat, autofill([named('Fe', 45, 'ug/dL'), named('TIBC', 300, 'ug/dL'), named('Ferritin', 80, unit)]))
+    expect(computed!.result.value).toBe('15')
+    expect(computed!.result.extra!.map((row) => row.value)).toEqual(['✓ ferritin 80'])
+  }
+})
