@@ -60,6 +60,7 @@ repo 提交的 `.npmrc` 不含憑證；開發者與 CI 由 `NODE_AUTH_TOKEN` 提
 
 ```ini
 @voho0000:registry=https://npm.pkg.github.com
+@mediprisma:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
 ```
 
@@ -90,6 +91,7 @@ repo 提交的 `.npmrc` 不含憑證；開發者與 CI 由 `NODE_AUTH_TOKEN` 提
 - CDSS：僅當 SDK 契約、照護規則、FHIR adapter 及檢驗套件的 entrypoints 均可解析時才顯示。其餘環境不顯示照護指引與試辦 pack 控制，不用空白規則假裝完成評估。
 - 共用檢驗：缺少私有套件時使用主 repo 公開歷史 `80c3a767c^` 的名稱／來源異常判讀函式。沒有複製私有 repo 的新規則；報告、累積表、AI 與計算機保持可建置。
 - 個人化衛教：套件未安裝時保留原有 Beta／民眾入口，明示內容尚未安裝；套件可用時保留完整衛教。
+- 藥物交互作用（`@mediprisma/vghtpe-ddi-check`）：「安全」分頁與交互作用檢核只在設了 `NEXT_PUBLIC_DDI_SERVICE_ORIGIN` 且套件可用時開啟。設了服務網址卻沒裝到套件時，建置直接失敗，不悄悄關閉功能。
 
 Next.js 同時為 Turbopack、webpack 與 TypeScript 選取相同模組，生成的 `tsconfig.optional.generated.json` 不提交。SDK 與 CDSS availability 只取決於建置時 artifact／package 狀態，不以 route、角色或登入替代套件權限。
 

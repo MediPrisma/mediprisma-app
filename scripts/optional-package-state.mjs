@@ -21,5 +21,6 @@ export function detectOptionalPackages(root, resolveModule) {
     care: fhir,
     education: sdk && labs && available(['@voho0000/personalized-education']),
     fhir,
+    ddi: available(['@mediprisma/vghtpe-ddi-check']),
   }
 }

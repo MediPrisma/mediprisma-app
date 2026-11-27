@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { detectSite } from '@/src/application/telemetry/launch-context'
 import { useInteractionCheck } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
-import { attentionFindings } from '@/features/clinical-summary/medications/utils/interaction-check'
+import { attentionFindings } from '@mediprisma/vghtpe-ddi-check'
 
 export const MEDICATION_SAFETY_FEATURE_ID = 'medication-safety'
 

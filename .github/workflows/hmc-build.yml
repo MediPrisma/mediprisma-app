@@ -89,7 +89,7 @@ jobs:
           trap cleanup_npmrc EXIT
           rm -f .npmrc
           printf '%s\n' \
-            '@voho0000:registry=https://npm.pkg.github.com' \
+            '@voho0000:registry=https://npm.pkg.github.com'             '@mediprisma:registry=https://npm.pkg.github.com' \
             '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' \
             'registry=https://registry.npmjs.org/' > .npmrc
           npm ci --ignore-scripts

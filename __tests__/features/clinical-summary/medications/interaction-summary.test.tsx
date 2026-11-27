@@ -3,7 +3,7 @@ import { InteractionSummary } from '@/features/clinical-summary/medications/comp
 import { useRunInteractionCheck } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
 import { resetServiceReach } from '@/features/clinical-summary/medications/hooks/hospital-service-reach'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
-import type { InteractionReview } from '@/features/clinical-summary/medications/utils/interaction-check'
+import type { InteractionReview } from '@mediprisma/vghtpe-ddi-check'
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW', t: { medications: {} } }),
