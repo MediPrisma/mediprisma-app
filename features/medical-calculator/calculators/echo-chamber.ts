@@ -136,7 +136,7 @@ export const ECHO_CHAMBER: CalculatorDef = {
       ...(statedLavi === undefined && laVolume !== undefined && bsa === undefined ? ['LAVI'] : []),
     ]
     const missing = notIndexed.length
-      ? label(` (no BSA: ${notIndexed.join(', ')} not calculated)`, `（缺 BSA，未算 ${notIndexed.join('、')}）`)
+      ? label(' (no BSA: not indexed)', '（缺 BSA）')
       : label('')
     // An abnormal LV geometry leads the summary line; a normal one adds nothing to read.
     const geometry = classifyLvGeometry(values.lvmi, values.rwt, sex)?.geometry
