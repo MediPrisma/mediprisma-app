@@ -92,7 +92,8 @@ export type AutofillSource =
   | { kind: 'natriuretic'; assay: 'BNP' | 'NT-PROBNP' }
   /** TIBC as reported, else the same day's serum iron + UIBC (a lab that reports UIBC in its place). */
   | { kind: 'tibc' }
-  | { kind: 'lab'; keys: string[] }
+  /** `loinc` names the analyte's own codes where the canonical map has none for it (serum iron); a coded row is taken before a name match. */
+  | { kind: 'lab'; keys: string[]; loinc?: string[] }
   /** `vital` optionally carries a semantic id enabling a display-name fallback
    *  (for FHIR that omits the vital's LOINC); the name match is unit-gated. */
   | { kind: 'vital'; loinc: string[]; vital?: VitalKind }

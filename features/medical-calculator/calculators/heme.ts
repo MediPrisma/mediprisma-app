@@ -69,7 +69,7 @@ export const HEME: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Serum iron ÷ TIBC; iron deficiency and overload.', zh: '血清鐵 ÷ TIBC；評估缺鐵與鐵過載。' },
       inputs: [
-        { key: 'iron', type: 'number', label: { en: 'Serum iron', zh: '血清鐵 (Fe)' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 60, high: 170 }, source: { kind: 'lab', keys: ['IRON'] } },
+        { key: 'iron', type: 'number', label: { en: 'Serum iron', zh: '血清鐵 (Fe)' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 60, high: 170 }, source: { kind: 'lab', keys: ['IRON'], loinc: ['2498-4'] } },
         // Filled from the record's TIBC, else the same day's serum iron + UIBC.
         { key: 'tibc', type: 'number', label: { en: 'TIBC (or serum iron + UIBC)', zh: '總鐵結合能力 (TIBC)（或 Fe＋UIBC）' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 250, high: 450 }, source: { kind: 'tibc' } },
         { key: 'ferritin', type: 'number', label: { en: 'Ferritin (optional)', zh: 'Ferritin（選填）' }, unit: 'ng/mL', dimension: 'ferritin', optional: true, source: { kind: 'lab', keys: ['FERRITIN'] } },

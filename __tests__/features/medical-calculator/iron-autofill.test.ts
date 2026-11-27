@@ -69,3 +69,24 @@ it('takes ferritin in µg/L as in ng/mL', () => {
     expect(computed!.result.extra!.map((row) => row.value)).toEqual(['✓ ferritin 80'])
   }
 })
+
+// Owner 2026-11-27: 「自動帶入要有 LOINC」. Every filled input is read by its LOINC
+// code where the row carries one, under whatever name the lab gives it.
+it('fills each iron calculator from LOINC-coded rows', () => {
+  const data = autofill([
+    coded('2498-4', 45, 'ug/dL'), coded('2500-7', 300, 'ug/dL'), coded('2276-4', 80, 'ng/mL'),
+    coded('718-7', 9.2, 'g/dL'), coded('787-2', 65, 'fL'), coded('789-8', 5.9, '10*6/uL'), coded('29463-7', 60, 'kg'),
+  ])
+  const result = (id: string) => computeAutofilledResult(CALCULATORS.find((c) => c.id === id)!, data)
+  expect(result('tsat')!.result.value).toBe('15')
+  expect(result('tsat')!.result.extra!.map((row) => row.value)).toEqual(['✓ ferritin 80'])
+  expect(result('mentzer-index')!.result.value).toBe('11')
+  const ganzoni = CALCULATORS.find((c) => c.id === 'iron-deficit-ganzoni')!
+  expect(resolveInput(ganzoni.inputs.find((input) => input.key === 'weight')!, data).value).toBe('60')
+  expect(resolveInput(ganzoni.inputs.find((input) => input.key === 'hb')!, data).value).toBe('9.2')
+})
+
+it('takes a coded serum iron and TIBC before a row matched by name', () => {
+  const data = autofill([named('Fe', 999, 'ug/dL'), named('TIBC', 999, 'ug/dL'), coded('2498-4', 45, 'ug/dL'), coded('2500-7', 300, 'ug/dL')])
+  expect(computeAutofilledResult(tsat, data)!.result.value).toBe('15')
+})
