@@ -62,50 +62,50 @@ describe('echo chamber calculator', () => {
 
   test('01: male 170 cm / 70 kg — concentric hypertrophy, LA mildly enlarged', () => {
     const result = calc.compute(fromReport(fixture01, { sex: 'male', height: '170', weight: '70' }))!
-    expect(result.value).toBe('5 / 8')
-    expect(result.interpretation!.zh).toBe('超出參考範圍：IVSd、LVPWd、LVMI、RWT、LAVI')
+    // LV mass is not graded once LVMI is: 7 graded rows.
+    expect(result.value).toBe('▲ 5 / 7')
+    expect(result.interpretation!.zh).toBe('向心性肥厚｜超出範圍：IVSd、LVPWd、LVMI、RWT、LAVI')
     expect(result.severity).toBe('moderate')
     expect(rows(fromReport(fixture01, { sex: 'male', height: '170', weight: '70' }))).toEqual([
-      'LVIDd · 正常｜48.0 mm (42.0–58.4)',
-      'IVSd · 高於範圍｜13.0 mm (6–10)',
-      'LVPWd · 高於範圍｜11.0 mm (6–10)',
-      'LV mass · 正常｜219.1 g (88–224)',
-      'LVMI (÷BSA) · 異常｜121.1 g/m² (49–115)',
-      'RWT · 異常｜0.458 (≤0.42)',
-      'LV 幾何型態 · 向心性肥厚｜',
+      'LVIDd｜48.0 mm (42.0–58.4)',
+      '▲ IVSd · 異常｜13.0 mm (6–10)',
+      '▲ LVPWd · 異常｜11.0 mm (6–10)',
+      '▲ LVMI · 異常｜121.1 g/m² (49–115) [219.1 g]',
+      '▲ RWT · 異常｜0.458 (≤0.42)',
       'LVEF｜42.3 %',
-      'LA volume｜62.0 mL',
-      'LAVI (÷BSA) · 輕度異常｜34.3 mL/m² (16–34)',
-      'TR Vmax · 正常｜2.74 m/s (≤2.8)',
+      '▲ LAVI · 輕度異常｜34.3 mL/m² (16–34) [62.0 mL]',
+      'TR Vmax｜2.74 m/s (≤2.8)',
       'BSA（Du Bois）｜1.81 m²',
     ])
-    expect(result.notes!.zh).toBe('計算與指引對照，不取代判讀醫師的臨床判斷。')
+    expect(result.notes!.zh).toBe('僅供參考，以臨床判讀為準。')
   })
 
   test('02: female 158 cm / 52 kg — all within reference', () => {
     const result = calc.compute(fromReport(fixture02, { sex: 'female', height: '158', weight: '52' }))!
-    expect(result.value).toBe('0 / 8')
+    expect(result.value).toBe('0 / 7')
     expect(result.interpretation!.zh).toBe('皆在參考範圍內')
     expect(result.severity).toBe('normal')
-    expect(result.extra).toContainEqual({ label: { en: 'LV geometry · Normal geometry', zh: 'LV 幾何型態 · 正常' }, value: '' })
+    // Nothing is flagged and a normal geometry adds no row.
+    expect(result.extra!.some(r => /▲|幾何|正常/.test(r.label.zh))).toBe(false)
   })
 
   test('03: male without height or weight — raw values graded, indices explained', () => {
     const values = fromReport(fixture03, { sex: 'male' })
     const result = calc.compute(values)!
     expect(rows(values)).toEqual([
-      'LVIDd · 高於範圍｜62.0 mm (42.0–58.4)',
-      'IVSd · 正常｜9.0 mm (6–10)',
-      'LVPWd · 正常｜9.0 mm (6–10)',
-      'LV mass · 高於範圍｜228.3 g (88–224)',
-      'RWT · 正常｜0.290 (≤0.42)',
+      '▲ LVIDd · 異常｜62.0 mm (42.0–58.4)',
+      'IVSd｜9.0 mm (6–10)',
+      'LVPWd｜9.0 mm (6–10)',
+      '▲ LV mass · 異常｜228.3 g (88–224)',
+      'RWT｜0.290 (≤0.42)',
       'LVEF｜28.6 %',
       'LA volume｜90.0 mL',
-      'TR Vmax · 異常｜3.35 m/s (≤2.8)',
+      '▲ TR Vmax · 異常｜3.35 m/s (≤2.8)',
     ])
-    expect(result.value).toBe('3 / 6')
-    expect(result.notes!.zh).toBe('缺身高或體重，未算 LVMI、LAVI。計算與指引對照，不取代判讀醫師的臨床判斷。')
-    expect(result.notes!.en).toMatch(/^LVMI and LAVI not calculated: height or weight missing\./)
+    expect(result.value).toBe('▲ 3 / 6')
+    // What could not be indexed is said in the summary line, where it is read first.
+    expect(result.interpretation!.zh).toBe('超出範圍：LVIDd、LV mass、TR Vmax（缺身高／體重，未算 LVMI、LAVI）')
+    expect(result.interpretation!.en).toMatch(/LVMI, LAVI not calculated: height or weight missing/)
   })
 
   test('LVEF is shown but never graded or counted', () => {
@@ -120,29 +120,26 @@ describe('echo chamber calculator', () => {
     expect(rows({ lvidd: '55', lavi: '30', rwt: '0.5', lvmi: '100' })).toEqual([
       'LVIDd · 需性別｜55.0 mm (M 42.0–58.4 / F 37.8–52.2)',
       'LVMI · 需性別｜100.0 g/m² (M 49–115 / F 43–95)',
-      'RWT · 異常｜0.500 (≤0.42)',
-      'LV 幾何型態 · 需性別｜',
-      'LAVI · 正常｜30.0 mL/m² (16–34)',
+      '▲ RWT · 異常｜0.500 (≤0.42)',
+      'LAVI｜30.0 mL/m² (16–34)',
     ])
-    expect(result.interpretation!.zh).toBe('超出參考範圍：RWT；2 項需性別')
+    expect(result.interpretation!.zh).toBe('超出範圍：RWT；2 項需性別')
     // Rows waiting for sex are not in the denominator: only RWT and LAVI are graded here.
-    expect(result.value).toBe('1 / 2')
+    expect(result.value).toBe('▲ 1 / 2')
     expect(calc.compute({ lvidd: '55' })).toMatchObject({ value: '—', interpretation: { zh: '1 項需性別' }, severity: undefined })
-    expect(calc.compute({ lvidd: '55', lavi: '30' })).toMatchObject({ value: '0 / 1', interpretation: { zh: '未超出參考範圍；1 項需性別' }, severity: undefined })
+    expect(calc.compute({ lvidd: '55', lavi: '30' })).toMatchObject({ value: '0 / 1', interpretation: { zh: '未超出範圍；1 項需性別' }, severity: undefined })
     // Agreeing references grade without sex and show both ranges.
-    expect(rows({ ivsd: '12' })).toEqual(['IVSd · 高於範圍｜12.0 mm (M 6–10 / F 6–9)'])
+    expect(rows({ ivsd: '12' })).toEqual(['▲ IVSd · 異常｜12.0 mm (M 6–10 / F 6–9)'])
   })
 
   test('an index stated in the report wins over raw ÷ BSA', () => {
     const values = { sex: 'male', height: '170', weight: '70', lvMass: '219.1', laVolume: '62', lvmi: '100', lavi: '30' }
     expect(rows(values)).toEqual([
-      'LV mass · 正常｜219.1 g (88–224)',
-      'LVMI · 正常｜100.0 g/m² (49–115)',
-      'LA volume｜62.0 mL',
-      'LAVI · 正常｜30.0 mL/m² (16–34)',
+      'LVMI｜100.0 g/m² (49–115) [219.1 g]',
+      'LAVI｜30.0 mL/m² (16–34) [62.0 mL]',
       'BSA（Du Bois）｜1.81 m²',
     ])
-    expect(calc.compute({ sex: 'male', lvMass: '200', lvmi: '100' })!.notes!.zh).toBe('計算與指引對照，不取代判讀醫師的臨床判斷。')
+    expect(calc.compute({ sex: 'male', lvMass: '200', lvmi: '100' })!.interpretation!.zh).toBe('皆在參考範圍內')
   })
 
   test('no measurement → no result', () => {

@@ -15,7 +15,8 @@ const GRADE: Record<EchoGrade | 'needsSex', L> = {
   mild: label('Mildly abnormal', '輕度異常'),
   moderate: label('Moderately abnormal', '中度異常'),
   severe: label('Severely abnormal', '重度異常'),
-  above: label('Above range', '高於範圍'),
+  // No severity partitions for these (wall thickness, diameter, mass): same word as the other ungraded abnormals.
+  above: label('Abnormal', '異常'),
   below: label('Below range', '低於範圍'),
   needsSex: label('Sex needed', '需性別'),
 }
@@ -54,7 +55,8 @@ function rangeText(metric: EchoChamberMetric, dp: number, sex?: EchoSex): string
   return male === female ? male : `M ${male} / F ${female}`
 }
 
-const withGrade = (name: string, grade: L): L => label(`${name} · ${grade.en}`, `${name} · ${grade.zh}`)
+// Rows outside reference carry ▲ and their grade; a normal row is its name alone.
+const withGrade = (name: string, grade: L, flagged: boolean): L => label(`${flagged ? '▲ ' : ''}${name} · ${grade.en}`, `${flagged ? '▲ ' : ''}${name} · ${grade.zh}`)
 
 export const ECHO_CHAMBER: CalculatorDef = {
   version: 'v1',
@@ -63,11 +65,11 @@ export const ECHO_CHAMBER: CalculatorDef = {
   inputs: [SEX_INPUT,
     { key: 'height', type: 'number', label: label('Height (for BSA)', '身高（算 BSA 用）'), unit: 'cm', dimension: 'height', optional: true, source: { kind: 'vital', loinc: HEIGHT_LOINC, vital: 'height' } },
     { key: 'weight', type: 'number', label: label('Weight (for BSA)', '體重（算 BSA 用）'), unit: 'kg', dimension: 'weight', optional: true, source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
-    echo('lvidd', 'LV end-diastolic diameter (LVIDd)', '左心室舒張末期內徑（LVIDd）', 'mm'),
-    echo('ivsd', 'Septal thickness (IVSd)', '室間隔厚度（IVSd）', 'mm'),
-    echo('lvpwd', 'Posterior wall thickness (LVPWd)', '後壁厚度（LVPWd）', 'mm'),
-    echo('lvMass', 'LV mass (LVMI = mass / BSA)', '左心室質量（LVMI＝質量／BSA）', 'g'),
-    echo('laVolume', 'LA volume (LAVI = volume / BSA)', '左心房容積（LAVI＝容積／BSA）', 'mL'),
+    echo('lvidd', 'LVIDd (LV end-diastolic diameter)', 'LVIDd（左心室舒張末期內徑）', 'mm'),
+    echo('ivsd', 'IVSd (septum)', 'IVSd（室間隔）', 'mm'),
+    echo('lvpwd', 'LVPWd (posterior wall)', 'LVPWd（後壁）', 'mm'),
+    echo('lvMass', 'LV mass', 'LV mass（左心室質量）', 'g'),
+    echo('laVolume', 'LA volume', 'LA volume（左心房容積）', 'mL'),
     echo('lvmi', 'LV mass index (LVMI)', '左心室質量指數（LVMI）', 'g/m²'),
     echo('lavi', 'LA volume index (LAVI)', '左心房容積指數（LAVI）', 'mL/m²'),
     echo('rwt', 'Relative wall thickness (RWT)', '相對壁厚（RWT）'),
@@ -92,13 +94,17 @@ export const ECHO_CHAMBER: CalculatorDef = {
     const extra: CalcResult['extra'] = []
     const abnormal: string[] = [], needsSex: string[] = []
     let graded = 0, severe = false
-    const push = (row: (typeof ROWS)[number]) => {
+    // The raw value its index came from rides on the index row; it gets a row of its own only without the index.
+    const raw: Partial<Record<EchoChamberMetric, string>> = {
+      lvmi: lvMass !== undefined ? ` [${fmt(lvMass, 1)} g]` : '',
+      lavi: laVolume !== undefined ? ` [${fmt(laVolume, 1)} mL]` : '',
+    }
+    for (const row of ROWS) {
+      if (row.key === 'lavi' && values.lavi === undefined && laVolume !== undefined) extra.push({ label: label('LA volume'), value: `${fmt(laVolume, 1)} mL` })
       const value = values[row.key]
-      if (value === undefined) return
-      const derived = (row.key === 'lvmi' && statedLvmi === undefined) || (row.key === 'lavi' && statedLavi === undefined)
-      const name = derived ? `${row.name} (÷BSA)` : row.name
+      if (value === undefined || (row.key === 'lvMass' && values.lvmi !== undefined)) continue
       const shown = `${fmt(value, row.dp)}${row.unit ? ` ${row.unit}` : ''}`
-      if (UNGRADED.has(row.key)) { extra.push({ label: label(name), value: shown }); return }
+      if (UNGRADED.has(row.key)) { extra.push({ label: label(row.name), value: shown }); continue }
       const result = gradeEchoMetric(row.key, value, sex)!
       // A row waiting for sex is not graded yet, so it is not in the denominator.
       if (result.grade === 'needsSex') needsSex.push(row.name)
@@ -107,18 +113,9 @@ export const ECHO_CHAMBER: CalculatorDef = {
         if (result.grade !== 'normal') { abnormal.push(row.name); if (result.grade === 'severe') severe = true }
       }
       extra.push({
-        label: withGrade(name, GRADE[result.grade]),
-        value: `${shown} (${rangeText(row.key, row.refDp, sex)})`,
+        label: result.grade === 'normal' ? label(row.name) : withGrade(row.name, GRADE[result.grade], result.grade !== 'needsSex'),
+        value: `${shown} (${rangeText(row.key, row.refDp, sex)})${raw[row.key] ?? ''}`,
       })
-    }
-    for (const row of ROWS) {
-      if (row.key === 'lavi' && laVolume !== undefined) extra.push({ label: label('LA volume'), value: `${fmt(laVolume, 1)} mL` })
-      push(row)
-      if (row.key === 'rwt') {
-        const geometry = classifyLvGeometry(values.lvmi, values.rwt, sex)
-        const g = geometry && GEOMETRY[geometry.geometry]
-        if (g) extra.push({ label: label(`LV geometry · ${g.en}`, `LV 幾何型態 · ${g.zh}`), value: '' })
-      }
     }
     if (bsa !== undefined) extra.push({ label: label('BSA (Du Bois)', 'BSA（Du Bois）'), value: `${fmt(bsa, 2)} m²` })
 
@@ -126,20 +123,24 @@ export const ECHO_CHAMBER: CalculatorDef = {
       ...(statedLvmi === undefined && lvMass !== undefined && bsa === undefined ? ['LVMI'] : []),
       ...(statedLavi === undefined && laVolume !== undefined && bsa === undefined ? ['LAVI'] : []),
     ]
-    const caution = label('Calculated against guideline references; does not replace the reading physician’s judgement.', '計算與指引對照，不取代判讀醫師的臨床判斷。')
-    const notes = notIndexed.length
-      ? label(`${notIndexed.join(' and ')} not calculated: height or weight missing. ${caution.en}`, `缺身高或體重，未算 ${notIndexed.join('、')}。${caution.zh}`)
-      : caution
-
+    const missing = notIndexed.length
+      ? label(` (${notIndexed.join(', ')} not calculated: height or weight missing)`, `（缺身高／體重，未算 ${notIndexed.join('、')}）`)
+      : label('')
+    // An abnormal LV geometry leads the summary line; a normal one adds nothing to read.
+    const geometry = classifyLvGeometry(values.lvmi, values.rwt, sex)?.geometry
+    const shape = geometry && geometry !== 'normal' && geometry !== 'needsSex' ? label(`${GEOMETRY[geometry].en} | `, `${GEOMETRY[geometry].zh}｜`) : label('')
     const sexNote = needsSex.length ? label(`; ${needsSex.length} need sex`, `；${needsSex.length} 項需性別`) : label('')
-    const interpretation = !graded
+    const summary = !graded
       ? (needsSex.length ? label(`${needsSex.length} need sex`, `${needsSex.length} 項需性別`) : label('No measurement to grade', '無可分級的量測'))
-      : abnormal.length ? label(`Outside reference: ${abnormal.join(', ')}${sexNote.en}`, `超出參考範圍：${abnormal.join('、')}${sexNote.zh}`)
-      : needsSex.length ? label(`None outside reference${sexNote.en}`, `未超出參考範圍${sexNote.zh}`)
+      : abnormal.length ? label(`${shape.en}Outside range: ${abnormal.join(', ')}${sexNote.en}`, `${shape.zh}超出範圍：${abnormal.join('、')}${sexNote.zh}`)
+      : needsSex.length ? label(`None outside range${sexNote.en}`, `未超出範圍${sexNote.zh}`)
       : label('All within reference range', '皆在參考範圍內')
+    const interpretation = label(`${summary.en}${missing.en}`, `${summary.zh}${missing.zh}`)
+    const notes = label('For reference only; the clinical reading prevails.', '僅供參考，以臨床判讀為準。')
     return {
       numericValue: abnormal.length,
-      value: graded ? `${abnormal.length} / ${graded}` : '—',
+      // ▲ ties the count to the flagged rows, so it does not read as a score.
+      value: !graded ? '—' : abnormal.length ? `▲ ${abnormal.length} / ${graded}` : `0 / ${graded}`,
       interpretation,
       severity: !graded || (needsSex.length && !abnormal.length) ? undefined : severe ? 'high' : abnormal.length ? 'moderate' : 'normal',
       extra, notes,
