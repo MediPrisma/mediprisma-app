@@ -85,6 +85,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'reticulocyte-index': { purpose: ['diagnosis', 'formula'], diseases: [{ en: 'Anemia', zh: '貧血' }] },
   'tsat': { purpose: ['diagnosis', 'formula'], diseases: [{ en: 'Iron deficiency', zh: '缺鐵' }, HEART_FAILURE, { en: 'Anemia', zh: '貧血' }] },
   'iron-deficit-ganzoni': { purpose: ['treatment', 'formula'], diseases: [{ en: 'Iron deficiency', zh: '缺鐵' }, { en: 'Anemia', zh: '貧血' }] },
+  'iv-iron-label-dose': { purpose: ['treatment'], diseases: [{ en: 'Iron deficiency', zh: '缺鐵' }, { en: 'Anemia', zh: '貧血' }] },
   'mentzer-index': { purpose: ['diagnosis', 'screening'], diseases: [{ en: 'Iron deficiency', zh: '缺鐵' }, { en: 'Thalassemia', zh: '地中海型貧血' }] },
   'nihss': { purpose: ['severity'], diseases: [{ en: 'Stroke', zh: '中風' }] },
   'abcd2': { purpose: ['prognosis', 'risk'], diseases: [{ en: 'TIA', zh: '暫時性腦缺血' }, { en: 'Stroke', zh: '中風' }] },

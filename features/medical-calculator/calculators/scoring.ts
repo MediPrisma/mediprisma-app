@@ -1064,6 +1064,20 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
     formula: { en: 'Iron deficit (mg) = weight (kg) × (target Hb − actual Hb) (g/dL) × 2.4 + iron stores (mg)', zh: '缺鐵量 (mg) = 體重 (kg) × (目標 Hb − 實際 Hb) (g/dL) × 2.4 + 儲存鐵 (mg)' },
     note: { en: 'Usual adult values: target Hb 15 g/dL, stores 500 mg. Under 35 kg: target 13 g/dL, stores 15 mg/kg.', zh: '成人常用值：目標 Hb 15 g/dL、儲存鐵 500 mg。體重 < 35 kg：目標 13 g/dL、儲存鐵 15 mg/kg。' },
   },
+  'iv-iron-label-dose': {
+    formula: { en: 'Total iron need = the label’s table cell for the hemoglobin and body-weight band', zh: '總鐵需求量＝仿單簡化表中，血色素與體重所在的那一格' },
+    outcome: {
+      scoreHeader: { en: 'Hb (g/dL) · weight', zh: 'Hb (g/dL)・體重' },
+      outcomeHeader: { en: 'Total iron need', zh: '總鐵需求量' },
+      rows: [
+        { score: 'Ferinject · Hb < 10', outcome: { en: '< 35 kg: 30 mg/kg · 35 to < 70 kg: 1500 mg · ≥ 70 kg: 2000 mg', zh: '< 35 kg：30 mg/kg・35 至 < 70 kg：1500 mg・≥ 70 kg：2000 mg' } },
+        { score: 'Ferinject · Hb 10 to < 14', outcome: { en: '< 35 kg: 15 mg/kg · 35 to < 70 kg: 1000 mg · ≥ 70 kg: 1500 mg', zh: '< 35 kg：15 mg/kg・35 至 < 70 kg：1000 mg・≥ 70 kg：1500 mg' } },
+        { score: 'Ferinject · Hb ≥ 14', outcome: { en: '< 35 kg: 15 mg/kg · ≥ 35 kg: 500 mg', zh: '< 35 kg：15 mg/kg・≥ 35 kg：500 mg' } },
+        { score: 'Monofer · Hb < 10', outcome: { en: '< 50 kg: 500 mg · 50 to < 70 kg: 1500 mg · ≥ 70 kg: 2000 mg', zh: '< 50 kg：500 mg・50 至 < 70 kg：1500 mg・≥ 70 kg：2000 mg' } },
+        { score: 'Monofer · Hb ≥ 10', outcome: { en: '< 50 kg: 500 mg · 50 to < 70 kg: 1000 mg · ≥ 70 kg: 1500 mg', zh: '< 50 kg：500 mg・50 至 < 70 kg：1000 mg・≥ 70 kg：1500 mg' } },
+      ],
+    },
+  },
   'mentzer-index': {
     formula: { en: 'Mentzer index = MCV (fL) / RBC (10⁶/µL)', zh: 'Mentzer 指數 = MCV (fL) / RBC (10⁶/µL)' },
     outcome: {
