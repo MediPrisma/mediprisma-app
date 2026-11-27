@@ -142,6 +142,25 @@ describe('echo chamber calculator', () => {
     expect(calc.compute({ sex: 'male', lvMass: '200', lvmi: '100' })!.interpretation!.zh).toBe('皆在參考範圍內')
   })
 
+  test('editing a dimension recalculates mass, RWT, LVMI and geometry', () => {
+    const filled = fromReport(fixture01, { sex: 'male', height: '170', weight: '70' })
+    // The report states neither, so the fields stay blank and both follow the dimensions.
+    expect(filled.lvMass).toBeUndefined()
+    expect(filled.rwt).toBeUndefined()
+    // LVPWd 11 → 8 mm: RWT 2×8/48 = 0.333; mass 0.832 × (6.9³ − 4.8³) + 0.6 = 181.9 g; LVMI 181.9 / 1.8097 = 100.5.
+    const edited = { ...filled, lvpwd: '8' }
+    expect(rows(edited)).toEqual(expect.arrayContaining([
+      'LVPWd｜8.0 mm (6–10)',
+      'LVMI｜100.5 g/m² (49–115) [181.9 g]',
+      'RWT｜0.333 (≤0.42)',
+    ]))
+    expect(calc.compute(edited)!.interpretation!.zh).toBe('超出範圍：IVSd、LAVI')
+    // A mass or RWT the report states is an independent measurement and is kept.
+    const stated = fromReport(`${fixture01} LV mass 180 g RWT 0.40`, { sex: 'male', height: '170', weight: '70', lvpwd: '8' })
+    expect(stated).toMatchObject({ lvMass: '180', rwt: '0.4' })
+    expect(rows(stated)).toEqual(expect.arrayContaining(['LVMI｜99.5 g/m² (49–115) [180.0 g]', 'RWT｜0.400 (≤0.42)']))
+  })
+
   test('no measurement → no result', () => {
     expect(calc.compute({})).toBeNull()
     expect(calc.compute({ sex: 'male', height: '170', weight: '70' })).toBeNull()

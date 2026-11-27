@@ -1,7 +1,7 @@
 import type { CalculatorDef, CalcResult, NumberInput, L } from '../types'
 import { SEX_INPUT, n, round, HEIGHT_LOINC, WEIGHT_LOINC } from './_shared'
 import type { EchoKey } from '../echo-autofill'
-import { duBoisBsa, indexToBsa } from '../echo-derived'
+import { aseLvMass, duBoisBsa, indexToBsa, relativeWallThickness } from '../echo-derived'
 import { ECHO_CHAMBER_REFERENCES, classifyLvGeometry, gradeEchoMetric, type EchoChamberMetric, type EchoGrade, type EchoSex, type LvGeometry } from '../echo-chamber-grading'
 
 const label = (en: string, zh = en): L => ({ en, zh })
@@ -68,11 +68,12 @@ export const ECHO_CHAMBER: CalculatorDef = {
     echo('lvidd', 'LVIDd (LV end-diastolic diameter)', 'LVIDd（左心室舒張末期內徑）', 'mm'),
     echo('ivsd', 'IVSd (septum)', 'IVSd（室間隔）', 'mm'),
     echo('lvpwd', 'LVPWd (posterior wall)', 'LVPWd（後壁）', 'mm'),
-    echo('lvMass', 'LV mass', 'LV mass（左心室質量）', 'g'),
+    // Only what the report states: left blank, mass and RWT follow the dimensions above, so an edited dimension is never judged against a stale estimate.
+    { ...echo('lvMassStated', 'LV mass (reported)', 'LV mass（報告值）', 'g'), key: 'lvMass' },
     echo('laVolume', 'LA volume', 'LA volume（左心房容積）', 'mL'),
     echo('lvmi', 'LV mass index (LVMI)', '左心室質量指數（LVMI）', 'g/m²'),
     echo('lavi', 'LA volume index (LAVI)', '左心房容積指數（LAVI）', 'mL/m²'),
-    echo('rwt', 'Relative wall thickness (RWT)', '相對壁厚（RWT）'),
+    { ...echo('rwtStated', 'RWT (reported)', 'RWT（報告值）'), key: 'rwt' },
     echo('lvef', 'LVEF', '左心室射出分率（LVEF）', '%'),
     echo('trv', 'TR peak velocity (TR Vmax)', '三尖瓣逆流峰值速度（TR Vmax）', 'm/s'),
   ],
@@ -81,12 +82,14 @@ export const ECHO_CHAMBER: CalculatorDef = {
     const positive = (key: string) => { const x = n(v, key); return x !== undefined && x > 0 ? x : undefined }
     const sex: EchoSex | undefined = v.sex === 'male' || v.sex === 'female' ? v.sex : undefined
     const bsa = duBoisBsa(positive('height'), positive('weight'))
-    const lvMass = positive('lvMass'), laVolume = positive('laVolume')
+    const lvidd = positive('lvidd'), ivsd = positive('ivsd'), lvpwd = positive('lvpwd')
+    // A stated mass or RWT wins; otherwise both are derived from the dimensions as they stand now.
+    const lvMass = positive('lvMass') ?? aseLvMass(lvidd, ivsd, lvpwd), laVolume = positive('laVolume')
     // A stated index wins; otherwise the raw value over Du Bois BSA.
     const statedLvmi = positive('lvmi'), statedLavi = positive('lavi')
     const values: Partial<Record<EchoChamberMetric, number>> = {
-      lvidd: positive('lvidd'), ivsd: positive('ivsd'), lvpwd: positive('lvpwd'), lvMass,
-      lvmi: statedLvmi ?? indexToBsa(lvMass, bsa), rwt: positive('rwt'), lvef: positive('lvef'),
+      lvidd, ivsd, lvpwd, lvMass,
+      lvmi: statedLvmi ?? indexToBsa(lvMass, bsa), rwt: positive('rwt') ?? relativeWallThickness(lvpwd, lvidd), lvef: positive('lvef'),
       lavi: statedLavi ?? indexToBsa(laVolume, bsa), trv: positive('trv'),
     }
     if (laVolume === undefined && !ROWS.some(row => values[row.key] !== undefined)) return null
