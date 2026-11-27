@@ -64,7 +64,7 @@
     "clsx": "^2.1.1",
     "dompurify": "^3.4.16",
     "fhirclient": "^2.6.3",
-    "firebase": "^12.19.0",
+    "firebase": "^13.4.0",
     "js-sha1": "^0.7.0",
     "lucide-react": "^1.48.0",
     "next": "^16.3.6",
