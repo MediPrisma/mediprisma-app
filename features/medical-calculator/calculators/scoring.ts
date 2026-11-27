@@ -1047,6 +1047,34 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
       ],
     },
   },
+  'tsat': {
+    formula: { en: 'TSAT (%) = serum iron / TIBC × 100;  TIBC = serum iron + UIBC when TIBC is not reported', zh: 'TSAT (%) = 血清鐵 / TIBC × 100；未報 TIBC 時 TIBC = 血清鐵 + UIBC' },
+    outcome: {
+      scoreHeader: { en: 'TSAT', zh: 'TSAT' },
+      outcomeHeader: { en: 'Interpretation', zh: '判讀' },
+      rows: [
+        { score: '< 20%', outcome: { en: 'Low: iron deficiency (ESC 2026 definition in heart failure)', zh: '偏低：缺鐵（ESC 2026 心衰竭定義）' } },
+        { score: '20–45%', outcome: { en: 'Usual range', zh: '一般範圍' } },
+        { score: '> 45%', outcome: { en: 'High: consider iron overload', zh: '偏高：考慮鐵過載' } },
+      ],
+    },
+    note: { en: 'Older heart-failure definition (ESC 2021): ferritin < 100 ng/mL, or 100–299 ng/mL with TSAT < 20%.', zh: '心衰竭舊定義（ESC 2021）：ferritin < 100 ng/mL，或 100–299 ng/mL 且 TSAT < 20%。' },
+  },
+  'iron-deficit-ganzoni': {
+    formula: { en: 'Iron deficit (mg) = weight (kg) × (target Hb − actual Hb) (g/dL) × 2.4 + iron stores (mg)', zh: '缺鐵量 (mg) = 體重 (kg) × (目標 Hb − 實際 Hb) (g/dL) × 2.4 + 儲存鐵 (mg)' },
+    note: { en: 'Usual adult values: target Hb 15 g/dL, stores 500 mg. Under 35 kg: target 13 g/dL, stores 15 mg/kg.', zh: '成人常用值：目標 Hb 15 g/dL、儲存鐵 500 mg。體重 < 35 kg：目標 13 g/dL、儲存鐵 15 mg/kg。' },
+  },
+  'mentzer-index': {
+    formula: { en: 'Mentzer index = MCV (fL) / RBC (10⁶/µL)', zh: 'Mentzer 指數 = MCV (fL) / RBC (10⁶/µL)' },
+    outcome: {
+      scoreHeader: { en: 'Index', zh: '指數' },
+      outcomeHeader: { en: 'More likely', zh: '較可能' },
+      rows: [
+        { score: '< 13', outcome: { en: 'Thalassemia trait', zh: '地中海型貧血帶因' } },
+        { score: '> 13', outcome: { en: 'Iron deficiency anemia', zh: '缺鐵性貧血' } },
+      ],
+    },
+  },
   'ldl-friedewald': {
     formula: { en: 'LDL (mg/dL) = Total cholesterol − HDL − (Triglycerides / 5)', zh: 'LDL (mg/dL) = 總膽固醇 − HDL − (三酸甘油酯 / 5)' },
     outcome: {

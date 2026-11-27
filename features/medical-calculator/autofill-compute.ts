@@ -131,7 +131,7 @@ export function resolveValue(input: CalcInput, autofill: Autofill): string {
   return resolveInput(input, autofill).value
 }
 
-const DATA_SOURCE_KINDS: AutofillSource['kind'][] = ['echo', 'bmi', 'natriuretic', 'lab', 'labSpecimen', 'labLoinc', 'vital', 'age', 'sex']
+const DATA_SOURCE_KINDS: AutofillSource['kind'][] = ['echo', 'bmi', 'natriuretic', 'tibc', 'lab', 'labSpecimen', 'labLoinc', 'vital', 'age', 'sex']
 
 /**
  * True only when EVERY required input is backed by patient data (a lab/vital/
@@ -201,7 +201,7 @@ export interface Readiness {
 // Lab/vital sources only — the data a patient may actually lack. Age/sex are
 // demographics (always available, and `sex` never reports `filled`), so they
 // don't gate how "ready" a calculator is for the loaded patient.
-const LAB_VITAL_KINDS: AutofillSource['kind'][] = ['echo', 'bmi', 'natriuretic', 'lab', 'labSpecimen', 'labLoinc', 'vital']
+const LAB_VITAL_KINDS: AutofillSource['kind'][] = ['echo', 'bmi', 'natriuretic', 'tibc', 'lab', 'labSpecimen', 'labLoinc', 'vital']
 
 /** How "ready to use for THIS patient" a calculator is, from the loaded data. */
 export function calcReadiness(calc: CalculatorDef, autofill: Autofill): Readiness {

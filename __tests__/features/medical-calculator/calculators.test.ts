@@ -913,6 +913,87 @@ describe('WHO 2019 CVD 10-year risk', () => {
   })
 })
 
+describe('Transferrin saturation (TSAT)', () => {
+  it('is serum iron over TIBC: 45 / 300 → 15%, iron deficient', () => {
+    const r = run('tsat', { iron: '45', tibc: '300' })
+    expect(r!.value).toBe('15')
+    expect(r!.unit).toBe('%')
+    expect(r!.numericValue).toBeCloseTo(15, 5)
+    expect(r!.interpretation!.zh).toContain('缺鐵')
+    expect(r!.severity).toBe('moderate')
+  })
+  it('reads 20% as not deficient and above 45% as high', () => {
+    expect(run('tsat', { iron: '60', tibc: '300' })!.severity).toBe('normal')
+    expect(run('tsat', { iron: '135', tibc: '300' })!.severity).toBe('normal')
+    const high = run('tsat', { iron: '180', tibc: '300' })
+    expect(high!.value).toBe('60')
+    expect(high!.interpretation!.zh).toContain('鐵過載')
+  })
+  // Auto-review round 1: thresholds read the unrounded value, never the displayed one.
+  it('reads a value just under 20% as deficient, and just over 45% as high', () => {
+    const low = run('tsat', { iron: '67', tibc: '335.5', ferritin: '200' })
+    expect(low!.value).toBe('19.97')
+    expect(low!.interpretation!.zh).toContain('偏低')
+    expect(low!.extra![0].value).toBe('✓ ferritin 200')
+    const high = run('tsat', { iron: '149', tibc: '331' })
+    expect(high!.value).toBe('45.02')
+    expect(high!.interpretation!.zh).toContain('偏高')
+    expect(run('tsat', { iron: '60.1', tibc: '300' })!.interpretation!.zh).toContain('一般範圍')
+  })
+  it('marks the older heart-failure definition when ferritin is given', () => {
+    const row = (values: CalcValues) => run('tsat', values)!.extra!.find((e) => e.label.en.startsWith('Older HF definition'))?.value
+    expect(row({ iron: '90', tibc: '300', ferritin: '80' })).toBe('✓ ferritin 80')
+    expect(row({ iron: '45', tibc: '300', ferritin: '250' })).toBe('✓ ferritin 250')
+    expect(row({ iron: '90', tibc: '300', ferritin: '250' })).toBe('✗ ferritin 250')
+    expect(row({ iron: '45', tibc: '300', ferritin: '300' })).toBe('✗ ferritin 300')
+    expect(row({ iron: '45', tibc: '300' })).toBeUndefined()
+  })
+  it('gives no result without iron or a binding capacity, and flags iron above TIBC', () => {
+    expect(run('tsat', { iron: '45', tibc: '' })).toBeNull()
+    expect(run('tsat', { iron: '', tibc: '300' })).toBeNull()
+    expect(run('tsat', { iron: '45', tibc: '0' })).toBeNull()
+    expect(run('tsat', { iron: '400', tibc: '300' })!.notes!.zh).toContain('核對')
+  })
+})
+
+describe('Iron deficit (Ganzoni)', () => {
+  it('70 kg, Hb 8 → target 15, stores 500: 70 × 7 × 2.4 + 500 = 1676 mg', () => {
+    const r = run('iron-deficit-ganzoni', { weight: '70', hb: '8', target: '15', stores: '500' })
+    expect(r!.value).toBe('1676')
+    expect(r!.unit).toBe('mg')
+    expect(r!.extra!.map((e) => e.value)).toEqual(['1176 mg', '500 mg'])
+  })
+  it('leaves only the stores once hemoglobin is at the target', () => {
+    expect(run('iron-deficit-ganzoni', { weight: '70', hb: '16', target: '15', stores: '500' })!.value).toBe('500')
+  })
+  it('gives no result while weight or hemoglobin is missing', () => {
+    expect(run('iron-deficit-ganzoni', { weight: '', hb: '8', target: '15', stores: '500' })).toBeNull()
+    expect(run('iron-deficit-ganzoni', { weight: '70', hb: '', target: '15', stores: '500' })).toBeNull()
+  })
+})
+
+describe('Mentzer index', () => {
+  it('MCV 65 / RBC 6.0 → 10.8, thalassemia trait more likely', () => {
+    const r = run('mentzer-index', { mcv: '65', rbc: '6.0' })
+    expect(r!.value).toBe('10.8')
+    expect(r!.interpretation!.zh).toContain('地中海型貧血')
+  })
+  it('MCV 70 / RBC 3.8 → 18.4, iron deficiency more likely', () => {
+    const r = run('mentzer-index', { mcv: '70', rbc: '3.8' })
+    expect(r!.value).toBe('18.4')
+    expect(r!.interpretation!.zh).toContain('缺鐵')
+  })
+  it('reads the unrounded index beside 13', () => {
+    const r = run('mentzer-index', { mcv: '65', rbc: '5.01' })
+    expect(r!.value).toBe('12.97')
+    expect(r!.interpretation!.zh).toContain('地中海型貧血')
+    expect(run('mentzer-index', { mcv: '65', rbc: '5' })!.interpretation!.zh).toContain('無法區分')
+  })
+  it('gives no result without both values', () => {
+    expect(run('mentzer-index', { mcv: '70', rbc: '' })).toBeNull()
+  })
+})
+
 describe('CALC_SCORING (計算說明 breakdown)', () => {
   const okL = (l?: { en: string; zh: string }) => !!(l && l.en.trim() && l.zh.trim())
 
