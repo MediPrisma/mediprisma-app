@@ -85,7 +85,7 @@ export function FirstRunTourOffer({ eligible }: { eligible: boolean }) {
         </div>
         <DialogFooter className="items-center sm:justify-between">
           <span className="text-xs text-muted-foreground max-sm:order-last">
-            {english ? 'Replay anytime from Tours in the header' : '隨時可從頁首「導覽」重看'}
+            {english ? 'Replay anytime from Tours in the top-right menu' : '隨時可從右上角選單的「導覽中心」重看'}
           </span>
           <div className="flex gap-2 max-sm:w-full max-sm:flex-col-reverse">
             <Button variant="ghost" className="min-h-[44px]" onClick={() => setOpen(false)}>

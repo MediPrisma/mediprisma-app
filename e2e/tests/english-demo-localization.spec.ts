@@ -34,9 +34,10 @@ test('starts in Traditional Chinese when no language preference exists', async (
 
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
   await expect(page.getByRole('heading', { name: '歡迎使用 MediPrisma' })).toBeVisible()
-  const headerLanguageButton = page.getByRole('button', { name: '語言: 繁體中文' })
-  await expect(headerLanguageButton).toBeVisible()
-  await expect(headerLanguageButton).toContainText('中文')
+  // The header menu's 語言 entry shows the current language.
+  await page.locator('[data-tour="header-more"]').click()
+  await expect(page.getByRole('menuitem', { name: /^語言/ })).toContainText('繁體中文')
+  await page.keyboard.press('Escape')
 
   const entryLanguageGroup = page.getByRole('group', { name: 'Language / 語言' })
   await expect(entryLanguageGroup).toBeVisible()
@@ -56,7 +57,8 @@ test('English demo keeps UI and de-identified demo labels in English', async ({ 
   await expect(page.getByText('NHI My Health Bank', { exact: false }).first()).toBeVisible()
   await expectVisiblePageHasNoHanText(page)
 
-  await page.getByRole('button', { name: 'Language: English' }).click()
+  await page.locator('[data-tour="header-more"]').click()
+  await page.getByRole('menuitem', { name: /^Language/ }).click()
   await expect(page.getByRole('menuitemradio', { name: 'English' })).toBeVisible()
   await expect(page.getByRole('menuitemradio', { name: 'Traditional Chinese' })).toBeVisible()
   await page.keyboard.press('Escape')

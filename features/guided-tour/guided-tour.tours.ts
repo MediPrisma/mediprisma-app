@@ -30,13 +30,11 @@ const hasRightFeature = (id: string) => (context: TourContext) => context.rightF
 const HUB_STEP: GuidedTourStep = {
   id: 'hub',
   scene: { panel: 'none' },
-  target: '[data-tour="tour-hub-button"]',
-  fallbackTarget: '[data-tour="header-more"]',
-  fallbackGraceAttempts: 4,
+  target: '[data-tour="header-more"]',
   title: { 'zh-TW': '其他功能，到導覽中心挑著學', en: 'Learn the rest from the tour hub' },
   body: {
-    'zh-TW': '「導覽」依任務分成 1 分鐘的小導覽，新功能也會在這裡提示。',
-    en: 'Tours are split into one-minute tasks, and new features are announced there too.',
+    'zh-TW': '右上角選單的「導覽中心」依任務分成 1 分鐘的小導覽，新功能也會在這裡提示。',
+    en: 'Tours, in the top-right menu, are split into one-minute tasks, and new features are announced there too.',
   },
   fallbackBody: {
     'zh-TW': '在「更多」選單打開導覽中心：依任務分成 1 分鐘的小導覽，新功能也會在這裡提示。',

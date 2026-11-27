@@ -57,8 +57,8 @@ const ICONS: Record<GuidedTourIcon, LucideIcon> = {
   sparkles: Sparkles,
 }
 
-/** The visible hub entry: the header button, or 更多 where the header is compact. */
-const HUB_ENTRY_SELECTORS = ['[data-tour="tour-hub-button"]', '[data-tour="header-more"]']
+/** The hub's entry: the header menu, whose 導覽中心 item opens it. */
+const HUB_ENTRY_SELECTORS = ['[data-tour="header-more"]']
 
 function hubEntry(): HTMLElement | null {
   const entries = HUB_ENTRY_SELECTORS
@@ -113,7 +113,7 @@ export function TourHub() {
   const news = useMemo(() => announcements.filter((item) => !item.opensHub), [announcements])
   const doneCount = tasks.filter((tour) => progress.completed.includes(tour.id)).length
 
-  // The hub has no DialogTrigger (it opens from the header, the 更多 menu or a
+  // The hub has no DialogTrigger (it opens from the header menu or a
   // hint), so focus goes back to where it was, or to the hub's entry.
   const restoreFocus = (event: Event) => {
     event.preventDefault()

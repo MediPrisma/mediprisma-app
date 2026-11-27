@@ -57,7 +57,7 @@ describe('first-run offer and announcements', () => {
 
   it('announces the new hub beside its button to readers of the previous tours', () => {
     localStorage.setItem(LEFT_BROWSER_TOUR_STORAGE_KEY, '1')
-    render(<><button type="button" data-tour="tour-hub-button">導覽</button><WhatsNewHint eligible /></>)
+    render(<><button type="button" data-tour="header-more">導覽</button><WhatsNewHint eligible /></>)
     act(() => { jest.advanceTimersByTime(1600) })
 
     expect(screen.getByTestId('whats-new-hint').textContent).toContain('導覽改版')
@@ -69,7 +69,7 @@ describe('first-run offer and announcements', () => {
   })
 
   it('stays quiet while not eligible', () => {
-    render(<><button type="button" data-tour="tour-hub-button">導覽</button><WhatsNewHint eligible={false} /></>)
+    render(<><button type="button" data-tour="header-more">導覽</button><WhatsNewHint eligible={false} /></>)
     act(() => { jest.advanceTimersByTime(5000) })
     expect(screen.queryByTestId('whats-new-hint')).toBeNull()
   })
@@ -85,12 +85,12 @@ describe('announcement hint and later dialogs', () => {
   afterEach(() => jest.useRealTimers())
 
   it('withdraws a shown hint, unread, when a dialog opens over it', async () => {
-    const { rerender } = render(<><button type="button" data-tour="tour-hub-button">導覽</button><WhatsNewHint eligible /></>)
+    const { rerender } = render(<><button type="button" data-tour="header-more">導覽</button><WhatsNewHint eligible /></>)
     act(() => { jest.advanceTimersByTime(1600) })
     expect(screen.getByTestId('whats-new-hint')).toBeTruthy()
 
     rerender(<>
-      <button type="button" data-tour="tour-hub-button">導覽</button>
+      <button type="button" data-tour="header-more">導覽</button>
       <WhatsNewHint eligible />
       <div role="dialog" aria-label="報告全文">全文</div>
     </>)

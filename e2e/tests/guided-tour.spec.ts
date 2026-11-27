@@ -12,12 +12,8 @@ const cases = [
 ]
 
 async function openTourHub(page: Page, english = false) {
-  const hubButton = page.getByRole('button', { name: english ? 'Tours' : '導覽中心', exact: true })
-  if (await hubButton.isVisible()) await hubButton.click()
-  else {
-    await page.getByRole('button', { name: english ? 'More' : '更多', exact: true }).click()
-    await page.getByRole('menuitem', { name: english ? 'Tours' : '導覽中心' }).click()
-  }
+  await page.locator('[data-tour="header-more"]').click()
+  await page.getByRole('menuitem', { name: english ? 'Tours' : '導覽中心' }).click()
   const hub = page.getByTestId('tour-hub')
   await expect(hub).toBeVisible()
   return hub

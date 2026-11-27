@@ -29,7 +29,7 @@ function Page() {
         {/* No [data-source-link]: the summary has not been generated. */}
         <section data-tour="medical-summary-overview">summary</section>
       </div>
-      <button type="button" data-tour="tour-hub-button">導覽</button>
+      <button type="button" data-tour="header-more">導覽</button>
     </div>
   )
 }

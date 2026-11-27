@@ -4,11 +4,10 @@
 import { AppProviders } from "@/src/application/providers/app-providers"
 import { EmbeddedImportBridge } from '@/features/import-bundle/hooks/useEmbeddedImport'
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
-import { AudienceSwitcher } from "@/src/shared/components/AudienceSwitcher"
 import { FirstRunOnboardingDialog } from "./_components/FirstRunOnboardingDialog"
-import { HeaderOverflowMenu } from "@/src/shared/components/HeaderOverflowMenu"
-import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
+import { HeaderMenuItems, PatientAudienceBadge } from "@/src/shared/components/HeaderMenuItems"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { ImportBundleButton, type ImportBundleButtonHandle } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
 import { OVERVIEW_WIDE_PANEL_PX } from "@/features/clinical-summary/overview/overview.types"
 import { WorkspacePanelsProvider } from "@/src/application/providers/workspace-panels.provider"
@@ -28,7 +27,7 @@ import { usePatient } from "@/src/application/hooks/patient/use-patient-query.ho
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type UIEvent } from "react"
-import { ChevronUp, ChevronDown } from "lucide-react"
+import { ChevronUp, ChevronDown, FileUp } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
 import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
@@ -37,8 +36,8 @@ import {
   FirstRunTourOffer,
   GuidedTourOverlay,
   TourHub,
-  TourHubButton,
   TourHubMenuItem,
+  TourHubNewsDot,
   WhatsNewHint,
   useGuidedTourStore,
 } from "@/features/guided-tour"
@@ -238,6 +237,7 @@ function PageContent() {
   // reasoning as `collapsed`). The less-used header controls (匯入資料 /
   // 語言 / 身份 …) come back with one click on the strip.
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
+  const importRef = useRef<ImportBundleButtonHandle>(null)
 
   // Onboarding detection: when neither SMART nor a local bundle is available,
   // the data hooks return `patient: null` with no error. Show a welcome
@@ -631,25 +631,27 @@ function PageContent() {
             </h1>
           </div>
           <ClinicalPatientContext patient={patient} />
-          {/* Header right cluster — kept lean (v0.4.0).
-              Less-used controls (theme, version, feedback, connection
-              info) live inside HeaderOverflowMenu (kebab); audience +
-              language collapse into the same menu only on mobile so the
-              bar never wraps on narrow screens. */}
-          <div className="flex shrink-0 items-center gap-1 sm:gap-3 @max-[72rem]:gap-1">
-            {/* iconOnlyOnMobile: header is space-constrained, so the
-                "匯入資料" label collapses on phones. The Welcome screen
-                mounts the same component without this flag so its big
-                CTA always reads as a labeled button. */}
-            <ImportBundleButton iconOnlyOnMobile />
-            <div className="flex items-center gap-2 max-lg:hidden lg:gap-3">
-              <AudienceSwitcher />
-              <LanguageSwitcher />
-            </div>
-            <TourHubButton disabled={!dataLoaded} />
-            <HeaderAuthButton />
-            <HeaderOverflowMenu
-              tourMenu={<TourHubMenuItem disabled={!dataLoaded} />}
+          {/* Header right cluster: the data-source badge, and one menu.
+              Import, tours, audience, language and 顯示與關於 are entries of
+              that menu on every screen size; only a non-default state (示範
+              資料 / 本地資料, the 民眾 view) takes room in the bar itself. */}
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <PatientAudienceBadge />
+            <ImportBundleButton ref={importRef} badgesOnly />
+            <HeaderAuthButton
+              triggerBadge={<TourHubNewsDot />}
+              menuItems={
+                <HeaderMenuItems
+                  importMenu={
+                    // The file picker must open inside this click.
+                    <DropdownMenuItem className="min-h-[36px] gap-2 max-md:min-h-[44px]" onSelect={() => importRef.current?.open()}>
+                      <FileUp className="h-4 w-4" aria-hidden="true" />
+                      {t.importBundle.button}
+                    </DropdownMenuItem>
+                  }
+                  tourMenu={<TourHubMenuItem disabled={!dataLoaded} />}
+                />
+              }
             />
           </div>
         </div>

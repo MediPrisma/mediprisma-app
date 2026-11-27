@@ -7,6 +7,8 @@ jest.mock('@/src/application/providers/language.provider', () => ({
     t: {
       auth: {
         restoringSession: '正在恢復登入',
+        signIn: '登入',
+        signedInAs: '登入身分',
       },
     },
   }),
@@ -19,7 +21,7 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>
 
 describe('HeaderAuthButton', () => {
-  it('shows a neutral restoring state instead of guest or sign-in actions', () => {
+  const auth = (overrides: Partial<ReturnType<typeof useAuth>>) =>
     mockUseAuth.mockReturnValue({
       user: null,
       isAnonymous: false,
@@ -38,12 +40,29 @@ describe('HeaderAuthButton', () => {
       whisperUsage: 0,
       perplexityLimit: 0,
       whisperLimit: 0,
+      ...overrides,
     })
+
+  it('shows a neutral restoring state instead of guest or sign-in actions', () => {
+    auth({})
 
     render(<HeaderAuthButton />)
 
+    // The menu (import, language …) stays reachable while the session restores.
     const status = screen.getByRole('button', { name: '正在恢復登入' })
-    expect(status).toBeDisabled()
+    expect(status).toBeEnabled()
     expect(screen.queryByText('訪客')).not.toBeInTheDocument()
+    expect(screen.queryByText('登入')).not.toBeInTheDocument()
+  })
+
+  it('names the signed-out trigger 登入, and shows only an icon once signed in', () => {
+    auth({ loading: false })
+    const { unmount } = render(<HeaderAuthButton />)
+    expect(screen.getByRole('button', { name: '登入' })).toHaveTextContent('登入')
+    unmount()
+
+    auth({ loading: false, user: { displayName: '測試醫師', email: 'doctor@synthetic.invalid' } as never })
+    render(<HeaderAuthButton />)
+    expect(screen.getByRole('button', { name: '測試醫師' })).toHaveTextContent('')
   })
 })
