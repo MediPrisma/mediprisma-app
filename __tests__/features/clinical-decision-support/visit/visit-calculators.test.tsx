@@ -97,7 +97,7 @@ describe('決策地圖 v2 · 計算機', () => {
   it('is one button at the head of the HF page; the map and its rows carry no calculator', () => {
     render(<Page id="p9-hfpef-af-dose" page="hf" />)
     const button = screen.getByTestId('cdss-book-calculators')
-    expect(button).toHaveAccessibleName('計算機，11 個可用')
+    expect(button).toHaveAccessibleName('計算機，12 個可用')
     expect(within(screen.getByTestId('cdss-book-map')).queryByText(/MAGGIC|HFA-PEFF/)).toBeNull()
     expect(screen.queryByTestId('cdss-book-calculator-list')).toBeNull()
   })
@@ -145,6 +145,9 @@ describe('決策地圖 v2 · 計算機', () => {
     expect(screen.getByTestId('cdss-book-calculator-maggic')).toHaveTextContent('→ DP-19')
     expect(screen.getByTestId('cdss-book-calculator-maggic')).toHaveAttribute('data-status', 'to-fill')
     expect(screen.getByTestId('cdss-book-calculator-cha2ds2-va')).toHaveTextContent('→ DP-14')
+    // DP-12 reads a TSAT; a record with serum iron and TIBC only leaves it to this.
+    expect(screen.getByTestId('cdss-book-calculator-tsat')).toHaveTextContent('→ DP-12')
+    expect(screen.getByTestId('cdss-book-calculator-tsat')).toHaveTextContent('待填 2')
     expect(screen.getByTestId('cdss-book-calculator-shfm')).toHaveTextContent('僅資料')
     // GWTG-HF reads an admission's values: never today's chart.
     expect(screen.getByTestId('cdss-book-calculator-gwtg-hf')).toHaveTextContent('住院時適用')

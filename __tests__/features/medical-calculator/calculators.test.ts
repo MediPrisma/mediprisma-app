@@ -913,6 +913,76 @@ describe('WHO 2019 CVD 10-year risk', () => {
   })
 })
 
+describe('Transferrin saturation (TSAT)', () => {
+  it('is serum iron over TIBC: 45 / 300 → 15%, iron deficient', () => {
+    const r = run('tsat', { iron: '45', tibc: '300' })
+    expect(r!.value).toBe('15')
+    expect(r!.unit).toBe('%')
+    expect(r!.numericValue).toBeCloseTo(15, 5)
+    expect(r!.interpretation!.zh).toContain('缺鐵')
+    expect(r!.severity).toBe('moderate')
+  })
+  it('reads 20% as not deficient and above 45% as high', () => {
+    expect(run('tsat', { iron: '60', tibc: '300' })!.severity).toBe('normal')
+    expect(run('tsat', { iron: '135', tibc: '300' })!.severity).toBe('normal')
+    const high = run('tsat', { iron: '180', tibc: '300' })
+    expect(high!.value).toBe('60')
+    expect(high!.interpretation!.zh).toContain('鐵過載')
+  })
+  it('builds TIBC from UIBC when the lab reports no TIBC, and prefers a reported TIBC', () => {
+    const r = run('tsat', { iron: '50', tibc: '', uibc: '200' })
+    expect(r!.value).toBe('20')
+    expect(r!.extra).toContainEqual({ label: { en: 'TIBC (iron + UIBC)', zh: 'TIBC（Fe＋UIBC）' }, value: '250 µg/dL' })
+    expect(run('tsat', { iron: '50', tibc: '500', uibc: '200' })!.value).toBe('10')
+  })
+  it('marks the older heart-failure definition when ferritin is given', () => {
+    const row = (values: CalcValues) => run('tsat', values)!.extra!.find((e) => e.label.en.startsWith('Older HF definition'))?.value
+    expect(row({ iron: '90', tibc: '300', ferritin: '80' })).toBe('✓ ferritin 80')
+    expect(row({ iron: '45', tibc: '300', ferritin: '250' })).toBe('✓ ferritin 250')
+    expect(row({ iron: '90', tibc: '300', ferritin: '250' })).toBe('✗ ferritin 250')
+    expect(row({ iron: '45', tibc: '300', ferritin: '300' })).toBe('✗ ferritin 300')
+    expect(row({ iron: '45', tibc: '300' })).toBeUndefined()
+  })
+  it('gives no result without iron or a binding capacity, and flags iron above TIBC', () => {
+    expect(run('tsat', { iron: '45', tibc: '' })).toBeNull()
+    expect(run('tsat', { iron: '', tibc: '300' })).toBeNull()
+    expect(run('tsat', { iron: '45', tibc: '0' })).toBeNull()
+    expect(run('tsat', { iron: '400', tibc: '300' })!.notes!.zh).toContain('核對')
+  })
+})
+
+describe('Iron deficit (Ganzoni)', () => {
+  it('70 kg, Hb 8 → target 15, stores 500: 70 × 7 × 2.4 + 500 = 1676 mg', () => {
+    const r = run('iron-deficit-ganzoni', { weight: '70', hb: '8', target: '15', stores: '500' })
+    expect(r!.value).toBe('1676')
+    expect(r!.unit).toBe('mg')
+    expect(r!.extra!.map((e) => e.value)).toEqual(['1176 mg', '500 mg'])
+  })
+  it('leaves only the stores once hemoglobin is at the target', () => {
+    expect(run('iron-deficit-ganzoni', { weight: '70', hb: '16', target: '15', stores: '500' })!.value).toBe('500')
+  })
+  it('gives no result while weight or hemoglobin is missing', () => {
+    expect(run('iron-deficit-ganzoni', { weight: '', hb: '8', target: '15', stores: '500' })).toBeNull()
+    expect(run('iron-deficit-ganzoni', { weight: '70', hb: '', target: '15', stores: '500' })).toBeNull()
+  })
+})
+
+describe('Mentzer index', () => {
+  it('MCV 65 / RBC 6.0 → 10.8, thalassemia trait more likely', () => {
+    const r = run('mentzer-index', { mcv: '65', rbc: '6.0' })
+    expect(r!.value).toBe('10.8')
+    expect(r!.interpretation!.zh).toContain('地中海型貧血')
+  })
+  it('MCV 70 / RBC 3.8 → 18.4, iron deficiency more likely', () => {
+    const r = run('mentzer-index', { mcv: '70', rbc: '3.8' })
+    expect(r!.value).toBe('18.4')
+    expect(r!.interpretation!.zh).toContain('缺鐵')
+  })
+  it('gives no result without both values', () => {
+    expect(run('mentzer-index', { mcv: '70', rbc: '' })).toBeNull()
+  })
+})
+
 describe('CALC_SCORING (計算說明 breakdown)', () => {
   const okL = (l?: { en: string; zh: string }) => !!(l && l.en.trim() && l.zh.trim())
 

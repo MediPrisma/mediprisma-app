@@ -64,6 +64,7 @@ export type ConvertDim =
   | 'pressure'    // blood-gas partial pressures (mmHg ↔ kPa)
   | 'osmolality'  // mOsm/kg ↔ Osm/kg
   | 'hemoglobin'  // g/dL ↔ g/L ↔ mmol/L
+  | 'iron'        // serum iron / TIBC / UIBC: µg/dL ↔ µmol/L
   | 'fio2'        // % ↔ fraction (21% ↔ 0.21)
   | 'albumin-creatinine-ratio' // urine ACR: mg/g ↔ mg/mmol
   | 'duration'    // ECG intervals: ms ↔ s

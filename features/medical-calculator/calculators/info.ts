@@ -252,6 +252,18 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Distinguishing a hypoproliferative anemia from an appropriate marrow response.', zh: '區分增生不良性貧血與骨髓反應正常。' },
     caveats: { en: 'Needs Hct and reticulocyte %; RPI ≥ 2 indicates an adequate response. Some labs report absolute reticulocytes instead of %.', zh: '需血球比容與網狀紅血球百分比；RPI ≥ 2 代表反應足夠。部分實驗室報告絕對值而非百分比。' },
   },
+  'tsat': {
+    useWhen: { en: 'Working up iron deficiency or iron overload when the lab reports serum iron and TIBC (or UIBC) without a TSAT; heart failure, where ESC 2026 defines iron deficiency as TSAT < 20%.', zh: '檢驗只報血清鐵與 TIBC（或 UIBC）而沒有 TSAT 時，評估缺鐵或鐵過載；心衰竭（ESC 2026 以 TSAT < 20% 定義缺鐵）。' },
+    caveats: { en: 'Use iron and TIBC from the same draw. Serum iron varies through the day and after oral or i.v. iron; inflammation lowers iron and TIBC. Thresholds differ by condition (CKD, pregnancy): read with ferritin and the clinical picture.', zh: '血清鐵與 TIBC 須為同一次抽血。血清鐵有日間變異，口服或靜脈鐵劑後會升高；發炎時血清鐵與 TIBC 皆下降。不同疾病（CKD、懷孕）判讀閾值不同，需併看 ferritin 與臨床。' },
+  },
+  'iron-deficit-ganzoni': {
+    useWhen: { en: 'Estimating the total i.v. iron dose for iron-deficiency anemia.', zh: '估算缺鐵性貧血靜脈鐵劑的總補充量。' },
+    caveats: { en: 'Target Hb 15 g/dL and stores 500 mg are the usual adult values; under 35 kg use a target of 13 g/dL and stores of 15 mg/kg. Not for ongoing blood loss. Dose per infusion and its maximum follow the product label, which may give its own simplified table.', zh: '目標 Hb 15 g/dL、儲存鐵 500 mg 為成人常用值；體重 < 35 kg 改用目標 13 g/dL、儲存鐵 15 mg/kg。持續失血者不適用。單次劑量與上限依各製劑仿單（部分仿單另有簡化劑量表）。' },
+  },
+  'mentzer-index': {
+    useWhen: { en: 'A first look at microcytic anemia: iron deficiency versus thalassemia trait.', zh: '小球性貧血的初步鑑別：缺鐵性貧血或地中海型貧血帶因。' },
+    caveats: { en: 'A screening index only: it misclassifies combined iron deficiency and thalassemia, and anemia of chronic disease. Confirm with iron studies and hemoglobin analysis.', zh: '僅為篩檢指標：缺鐵合併地中海型貧血、慢性病貧血時會誤判。需以鐵相關檢驗與血紅素分析確認。' },
+  },
   'gcs': {
     useWhen: { en: 'Quantifying and trending consciousness in trauma / altered mental status.', zh: '創傷／意識改變時量化並追蹤意識程度。' },
     caveats: { en: 'Score the best response; ≤ 8 → consider airway protection. Intubation, sedation, or aphasia confound the verbal score.', zh: '取最佳反應計分；≤ 8 應考慮氣道保護。插管、鎮靜或失語會干擾語言分數。' },
