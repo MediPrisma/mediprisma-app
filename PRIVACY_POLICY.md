@@ -122,7 +122,7 @@ Hosting、Firebase、AI provider、郵件服務或網路基礎設施通常會在
 
 為排查診間電腦問題，此資料流使用 localStorage 保存隨機瀏覽器識別碼，並將其隨事件傳送；儲存受限時退回單頁識別碼。Gateway 接收現有 Firebase ID token 作驗證，記錄驗證成功的 UID、email（匿名帳號通常沒有 email）、連線來源 IP，以及管理員對照出的診間／電腦名稱。UID 不等於 Windows 或院內職工帳號，IP 也可能是共用出口。原 token 不保存。上述識別與事件內容一起加密，事件 UUID 與收件時間為明文索引；僅授權管理員可解密讀取，保存期限由部署者明確設定。
 
-此資料流不傳 prompt、AI 回覆、病歷內容、音訊、圖片、病人識別碼或其雜湊。不宣稱診斷資料不可識別。Firebase SDK 自動提供／更新憑證，Collector 不另存 token，也不要求使用者額外登入；Gateway 定期向 Google 取得公鑰，不將紀錄傳給 Google。認證、網路失敗或關頁可能漏記，但不影響原本 AI 或臨床功能。實作與限制見 [Collector 試行說明](docs/COLLECTOR-PILOT.md)。程式碼存在不代表正式部署已啟用。
+此資料流不傳 prompt、AI 回覆、病歷內容、音訊、圖片、病人識別碼或其雜湊。唯一例外是 AI 摘要：同一條件下，摘要第一次失敗、自動重試也失敗時，會不經確認、自動把該輪的 prompt（含送給 AI 的病歷內容）與 AI 回答以加密方式送到同一 Collector 的另一個收件位置，與醫師在「回報摘要問題」手動送出的內容相同，僅授權管理員可讀，保存期限由部署者設定；使用者停止的摘要不會送出。不宣稱診斷資料不可識別。Firebase SDK 自動提供／更新憑證，Collector 不另存 token，也不要求使用者額外登入；Gateway 定期向 Google 取得公鑰，不將紀錄傳給 Google。認證、網路失敗或關頁可能漏記，但不影響原本 AI 或臨床功能。實作與限制見 [Collector 試行說明](docs/COLLECTOR-PILOT.md)。程式碼存在不代表正式部署已啟用。
 
 ### 2.10 檢驗資料問題回報（醫師主動送出）
 

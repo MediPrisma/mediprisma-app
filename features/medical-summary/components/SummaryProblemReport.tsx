@@ -121,7 +121,7 @@ export function SummaryProblemReport({ records, busy, onOpen, renderTrigger }: {
       <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>回報摘要問題</DialogTitle>
-          <DialogDescription>自動診斷只傳送技術資訊。此回報包含整次操作的提示詞、病歷內容與 AI 回答，請先確認下方預覽。收件端會另記錄您的登入帳號與來源電腦資訊，供追蹤處理。紀錄僅暫存在此頁，重新整理後會消失。</DialogDescription>
+          <DialogDescription>此回報傳送整次操作的提示詞（含病歷內容）與 AI 回答；摘要失敗兩次時，也會自動將當輪相同內容送至同一院內收件端。收件端另記錄登入帳號與來源電腦，此頁紀錄重整後消失。</DialogDescription>
         </DialogHeader>
         <p className="break-all text-sm">收件位置：{snapshot ? new URL(snapshot.endpoint).origin : ''}</p>
         <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-md border bg-muted/30 p-3 text-sm">
