@@ -39,7 +39,7 @@ export const CALC_INFO: Record<string, CalcInfo> = {
   },
   'echo-chamber': {
     useWhen: { en: 'Grading an adult echo report’s LV, LA and TR measurements against ASE/EACVI references.', zh: '成人心超報告的左心室、左心房與 TR 量測，對照 ASE/EACVI 參考值。' },
-    caveats: { en: 'Values come from one report; check its date and method. LVMI and LAVI use the report’s index when given, else Du Bois BSA. LVEF is shown ungraded: reports give single-plane values, the reference is biplane.', zh: '數值取自同一份報告，請核對日期與量法。報告有 LVMI、LAVI 時直接採用，否則以 Du Bois BSA 推算。LVEF 只列數值不分級：報告多為單平面，參考值為雙平面。' },
+    caveats: { en: 'Values come from one report; check its date and method. LVMI and LAVI use the report’s index when given, else Du Bois BSA. LVEF uses the heart-failure categories (≤40 reduced, 41–49 mildly reduced, ≥50 preserved), not the ASE biplane table.', zh: '數值取自同一份報告，請核對日期與量法。報告有 LVMI、LAVI 時直接採用，否則以 Du Bois BSA 推算。LVEF 依心衰竭分類（≤40 降低、41–49 輕度降低、≥50 保留），不用 ASE 雙平面分級表。' },
   },
   'maggic-hf': {
     useWhen: { en: 'Discussing 1- and 3-year all-cause mortality in an adult with stable chronic heart failure across the LVEF spectrum.', zh: '成人慢性心衰竭穩定期，用於討論各種 LVEF 範圍的 1 年與 3 年全因死亡率。' },

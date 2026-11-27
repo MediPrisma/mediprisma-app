@@ -40,8 +40,11 @@ const ROWS: Array<{ key: EchoChamberMetric; name: string; unit: string; dp: numb
   { key: 'lavi', name: 'LAVI', unit: 'mL/m²', dp: 1, refDp: 0 },
   { key: 'trv', name: 'TR Vmax', unit: 'm/s', dp: 2, refDp: 1 },
 ]
-// LVEF from the report is single-plane; the reference is biplane, so it is shown ungraded.
-const UNGRADED = new Set<EchoChamberMetric>(['lvef'])
+// LVEF is read by the heart-failure categories (owner decision 2026-11-27), not ASE Table 4, whose
+// biplane sex-specific limits would call a single-plane 50–51 % abnormal: ≤40 reduced, above 40 and
+// below 50 mildly reduced, ≥50 preserved. A value between 40 and 41 is past the reduced band.
+const lvefCategory = (lvef: number): L | undefined =>
+  lvef <= 40 ? label('Reduced', '降低') : lvef < 50 ? label('Mildly reduced', '輕度降低') : undefined
 
 const fmt = (value: number, dp: number) => round(value, dp).toFixed(dp)
 
@@ -107,7 +110,13 @@ export const ECHO_CHAMBER: CalculatorDef = {
       const value = values[row.key]
       if (value === undefined || (row.key === 'lvMass' && values.lvmi !== undefined)) continue
       const shown = `${fmt(value, row.dp)}${row.unit ? ` ${row.unit}` : ''}`
-      if (UNGRADED.has(row.key)) { extra.push({ label: label(row.name), value: shown }); continue }
+      if (row.key === 'lvef') {
+        const category = lvefCategory(value)
+        graded++
+        if (category) abnormal.push(row.name)
+        extra.push({ label: category ? withGrade(row.name, category, true) : label(row.name), value: `${shown} (≥50)` })
+        continue
+      }
       const result = gradeEchoMetric(row.key, value, sex)!
       // A row waiting for sex is not graded yet, so it is not in the denominator.
       if (result.grade === 'needsSex') needsSex.push(row.name)
@@ -149,5 +158,5 @@ export const ECHO_CHAMBER: CalculatorDef = {
       extra, notes,
     }
   },
-  reference: 'Lang RM et al. Recommendations for cardiac chamber quantification by echocardiography in adults: an update from the ASE and the EACVI. J Am Soc Echocardiogr 2015;28:1–39.e14 (Eur Heart J Cardiovasc Imaging 2015;16:233–271). Nagueh SF et al. Recommendations for the evaluation of left ventricular diastolic function by echocardiography: an update from the ASE and the EACVI. J Am Soc Echocardiogr 2016;29:277–314 (TR velocity cut-off). BSA: Du Bois D, Du Bois EF. Arch Intern Med 1916;17:863–871.',
+  reference: 'Lang RM et al. Recommendations for cardiac chamber quantification by echocardiography in adults: an update from the ASE and the EACVI. J Am Soc Echocardiogr 2015;28:1–39.e14 (Eur Heart J Cardiovasc Imaging 2015;16:233–271). Nagueh SF et al. Recommendations for the evaluation of left ventricular diastolic function by echocardiography: an update from the ASE and the EACVI. J Am Soc Echocardiogr 2016;29:277–314 (TR velocity cut-off). LVEF categories: Bozkurt B et al. Universal definition and classification of heart failure. J Card Fail 2021;27:387–413. BSA: Du Bois D, Du Bois EF. Arch Intern Med 1916;17:863–871.',
 }

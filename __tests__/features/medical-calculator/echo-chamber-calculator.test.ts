@@ -62,9 +62,9 @@ describe('echo chamber calculator', () => {
 
   test('01: male 170 cm / 70 kg — concentric hypertrophy, LA mildly enlarged', () => {
     const result = calc.compute(fromReport(fixture01, { sex: 'male', height: '170', weight: '70' }))!
-    // LV mass is not graded once LVMI is: 7 graded rows.
-    expect(result.value).toBe('▲ 5 / 7')
-    expect(result.interpretation!.zh).toBe('向心性肥厚｜超出範圍：IVSd、LVPWd、LVMI、RWT、LAVI')
+    // LV mass is not graded once LVMI is: 8 graded rows.
+    expect(result.value).toBe('▲ 6 / 8')
+    expect(result.interpretation!.zh).toBe('向心性肥厚｜超出範圍：IVSd、LVPWd、LVMI、RWT、LVEF、LAVI')
     expect(result.severity).toBe('moderate')
     expect(rows(fromReport(fixture01, { sex: 'male', height: '170', weight: '70' }))).toEqual([
       'LVIDd｜48.0 mm (42.0–58.4)',
@@ -72,7 +72,7 @@ describe('echo chamber calculator', () => {
       '▲ LVPWd · 異常｜11.0 mm (6–10)',
       '▲ LVMI · 異常｜121.1 g/m² (49–115) [219.1 g]',
       '▲ RWT · 異常｜0.458 (≤0.42)',
-      'LVEF｜42.3 %',
+      '▲ LVEF · 輕度降低｜42.3 % (≥50)',
       '▲ LAVI · 輕度異常｜34.3 mL/m² (16–34) [62.0 mL]',
       'TR Vmax｜2.74 m/s (≤2.8)',
       'BSA（Du Bois）｜1.81 m²',
@@ -82,7 +82,7 @@ describe('echo chamber calculator', () => {
 
   test('02: female 158 cm / 52 kg — all within reference', () => {
     const result = calc.compute(fromReport(fixture02, { sex: 'female', height: '158', weight: '52' }))!
-    expect(result.value).toBe('0 / 7')
+    expect(result.value).toBe('0 / 8')
     expect(result.interpretation!.zh).toBe('皆在參考範圍內')
     expect(result.severity).toBe('normal')
     // Nothing is flagged and a normal geometry adds no row.
@@ -98,21 +98,27 @@ describe('echo chamber calculator', () => {
       'LVPWd｜9.0 mm (6–10)',
       '▲ LV mass · 異常｜228.3 g (88–224)',
       'RWT｜0.290 (≤0.42)',
-      'LVEF｜28.6 %',
+      '▲ LVEF · 降低｜28.6 % (≥50)',
       'LA volume｜90.0 mL',
       '▲ TR Vmax · 異常｜3.35 m/s (≤2.8)',
     ])
-    expect(result.value).toBe('▲ 3 / 6')
+    expect(result.value).toBe('▲ 4 / 7')
     // What could not be indexed is said in the summary line, where it is read first.
-    expect(result.interpretation!.zh).toBe('超出範圍：LVIDd、LV mass、TR Vmax（缺 BSA，未算 LVMI、LAVI）')
+    expect(result.interpretation!.zh).toBe('超出範圍：LVIDd、LV mass、LVEF、TR Vmax（缺 BSA，未算 LVMI、LAVI）')
     expect(result.interpretation!.en).toMatch(/no BSA: LVMI, LAVI not calculated/)
   })
 
-  test('LVEF is shown but never graded or counted', () => {
-    const result = calc.compute({ sex: 'male', lvef: '20', trv: '2.0' })!
-    expect(result.value).toBe('0 / 1')
-    expect(result.extra![0]).toEqual({ label: { en: 'LVEF', zh: 'LVEF' }, value: '20.0 %' })
-    expect(calc.compute({ lvef: '35' })).toMatchObject({ value: '—', interpretation: { zh: '無可分級的量測' } })
+  test('LVEF follows the heart-failure categories, with or without sex', () => {
+    const row = (lvef: string) => rows({ lvef })[0]
+    expect(row('20')).toBe('▲ LVEF · 降低｜20.0 % (≥50)')
+    expect(row('40')).toBe('▲ LVEF · 降低｜40.0 % (≥50)')
+    expect(row('40.5')).toBe('▲ LVEF · 輕度降低｜40.5 % (≥50)')
+    expect(row('49.9')).toBe('▲ LVEF · 輕度降低｜49.9 % (≥50)')
+    // 50–51 % is preserved, where ASE Table 4 would call a man mildly abnormal.
+    expect(row('50')).toBe('LVEF｜50.0 % (≥50)')
+    expect(rows({ sex: 'male', lvef: '51' })[0]).toBe('LVEF｜51.0 % (≥50)')
+    expect(calc.compute({ sex: 'male', lvef: '20', trv: '2.0' })).toMatchObject({ value: '▲ 1 / 2', interpretation: { zh: '超出範圍：LVEF' } })
+    expect(calc.compute({ lvef: '62' })).toMatchObject({ value: '0 / 1', interpretation: { zh: '皆在參考範圍內' } })
   })
 
   test('sex blank: rows whose male and female grades differ ask for sex', () => {
@@ -154,7 +160,7 @@ describe('echo chamber calculator', () => {
       'LVMI｜100.5 g/m² (49–115) [181.9 g]',
       'RWT｜0.333 (≤0.42)',
     ]))
-    expect(calc.compute(edited)!.interpretation!.zh).toBe('超出範圍：IVSd、LAVI')
+    expect(calc.compute(edited)!.interpretation!.zh).toBe('超出範圍：IVSd、LVEF、LAVI')
     // A mass or RWT the report states is an independent measurement and is kept.
     const stated = fromReport(`${fixture01} LV mass 180 g RWT 0.40`, { sex: 'male', height: '170', weight: '70', lvpwd: '8' })
     expect(stated).toMatchObject({ lvMass: '180', rwt: '0.4' })
