@@ -110,6 +110,11 @@ jest.mock('@/src/application/hooks/ai-generation/use-ai-slot-generation.hook', (
     }
   },
 }))
+const mockSendFailureReport = jest.fn()
+jest.mock('@/src/application/telemetry/summary-report', () => ({
+  ...jest.requireActual('@/src/application/telemetry/summary-report'),
+  sendSummaryFailureReport: (...args: unknown[]) => mockSendFailureReport(...args),
+}))
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: mockAudience }) }))
 jest.mock('@/src/application/providers/ai-demographics-gate.provider', () => ({ useAiDemographicsGate: () => ({ demographicsReadyForAi: true }) }))
 
@@ -118,6 +123,7 @@ beforeEach(() => {
   mockAudience = 'medical'
   contextLimit = 120_000
   mockStream.mockReset()
+  mockSendFailureReport.mockReset()
   medicalSummaryStore.setState({ byKey: {}, running: { [SLOT]: true } } as any)
   jest.spyOn(console, 'info').mockImplementation(() => {})
   jest.spyOn(console, 'warn').mockImplementation(() => {})
@@ -561,4 +567,53 @@ test.each([120_000, 1_000_000])('fixed severity and trend cases hold through the
   expect(mockResult.problems[1].metricNeedsReview).toBe(true)
   expect(mockResult.problems[1].metric.indexOf('2026-01-01')).toBeLessThan(mockResult.problems[1].metric.indexOf('2026-02-01'))
   expect(mockResult.cardErrors).toBeUndefined()
+})
+
+// 北榮 entry: a run whose card still failed after the lane's own retry is handed
+// to the automatic failure report with that run's id; the sender itself checks
+// the site (ai-failure-report.test.ts).
+const failureReportRun = () => mockSendFailureReport.mock.calls.map(([, runId]) => runId)
+
+test('a card that fails again after its retry is reported once, with this run', async () => {
+  renderHook(() => useMedicalSummary())
+  answerEverything(() => 'SYNTHETIC-NOT-A-MODULE')
+  await act(async () => runGeneration())
+  expect(mockResult.cardErrors).toHaveProperty('reports')
+  const runId = (await import('@/src/application/stores/ai-execution-diagnostics.store')).useAiExecutionDiagnosticsStore.getState().summaryRuns[SLOT]
+  expect(runId).toBeTruthy()
+  expect(failureReportRun()).toEqual([runId])
+})
+
+test('a run whose lanes all fail is reported; a success or a recovered retry is not', async () => {
+  renderHook(() => useMedicalSummary())
+  answerEverything()
+  await act(async () => runGeneration())
+  expect(mockResult.cardErrors).toBeUndefined()
+  expect(mockSendFailureReport).not.toHaveBeenCalled()
+
+  answerEverything((keys, callIndex) => {
+    if (callIndex === 0) throw new Error('Network error')
+    return reportsReply(keys)
+  })
+  await act(async () => runGeneration())
+  expect(mockResult.cardErrors).toBeUndefined()
+  expect(mockSendFailureReport).not.toHaveBeenCalled()
+
+  mockStream.mockReset().mockRejectedValue(new Error('Network error'))
+  await act(async () => runGeneration())
+  expect(mockSendFailureReport).toHaveBeenCalledTimes(1)
+})
+
+test('a user stop is never reported', async () => {
+  const controller = new AbortController()
+  mockStream.mockImplementation((_messages: any[], options: any) => new Promise((_resolve, reject) => {
+    options.signal?.addEventListener('abort', () => reject(Object.assign(new Error('stopped'), { name: 'AbortError' })), { once: true })
+  }))
+  renderHook(() => useMedicalSummary())
+  let generation!: Promise<void>
+  act(() => { generation = runGeneration({ signal: controller.signal }) })
+  const rejected = expect(generation).rejects.toMatchObject({ name: 'AbortError' })
+  await waitFor(() => expect(mockStream).toHaveBeenCalled())
+  await act(async () => { controller.abort(); await rejected })
+  expect(mockSendFailureReport).not.toHaveBeenCalled()
 })
