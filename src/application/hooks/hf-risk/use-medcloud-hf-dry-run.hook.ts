@@ -12,6 +12,9 @@ import { emptyHfDiagnosisDraft, withPhysicianHfDiagnosis, type HfPhysicianDiagno
 import { hasHfDiagnosis } from '@/src/core/hf-risk/input-summary'
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
 import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction, type HfRequestOptions } from '@/src/infrastructure/hf-risk/dry-run-client'
+import type { HfDiagnosticRecord } from '@/src/core/hf-risk/diagnostics'
+import { diagnosticUuid } from '@/src/shared/utils/summary-diagnostics'
+import type { HfReportSnapshot } from '@/src/application/telemetry/hf-report'
 
 function subscribeToRecordChange(onChange: () => void) {
   window.addEventListener(BUNDLE_CHANGED_EVENT, onChange)
@@ -47,6 +50,7 @@ export function useMedcloudHfDryRun() {
   const [localMode, activeImportId] = JSON.parse(snapshot) as [boolean, string | null]
   const [context, setContext] = useState<Context | null>(null)
   const [run, setRun] = useState<{ importId: string; input: HfInput; claims: HfClaimRuns } | null>(null)
+  const [diagnostics, setDiagnostics] = useState<{ importId: string; input: HfInput; runId: string; records: HfDiagnosticRecord[]; report?: HfReportSnapshot } | null>(null)
   const [message, setMessage] = useState<{ importId: string | null; code: string } | null>(null)
   const [busyImportId, setBusyImportId] = useState<string | null>(null)
   const busy = busyImportId !== null && busyImportId === activeImportId
@@ -59,11 +63,17 @@ export function useMedcloudHfDryRun() {
     setObservedSnapshot(snapshot)
     setContext(null)
     setRun(null)
+    setDiagnostics(null)
     setMessage(null)
     setBusyImportId(null)
   }
   const current = localMode && context?.importId === activeImportId ? context : null
   const visibleRuns = run?.importId === activeImportId && run.input === current?.input ? run.claims : null
+  const visibleDiagnostics = diagnostics?.importId === activeImportId && diagnostics.input === current?.input ? diagnostics : null
+  const setReportSnapshot = (report: HfReportSnapshot) => {
+    const owner = visibleDiagnostics?.runId
+    if (owner) setDiagnostics(previous => previous?.runId === owner ? { ...previous, report } : previous)
+  }
   const visibleMessage = (localMode || message?.code === 'source-unsupported') && message && message.importId === activeImportId ? message.code : null
   useEffect(() => () => { controller.current?.abort(); controller.current = null; unsubscribeAuth.current?.(); unsubscribeAuth.current = null }, [activeImportId, localMode])
 
@@ -72,6 +82,7 @@ export function useMedcloudHfDryRun() {
     unsubscribeAuth.current?.()
     unsubscribeAuth.current = null
     setRun(null)
+    setDiagnostics(null)
     setMessage(null)
   }
   async function prepare() {
@@ -127,8 +138,14 @@ export function useMedcloudHfDryRun() {
     controller.current = abort
     setBusyImportId(snapshot.importId)
     setRun({ importId: snapshot.importId, input: snapshot.input, claims: {} })
+    const runId = diagnosticUuid()
+    setDiagnostics({ importId: snapshot.importId, input: snapshot.input, runId, records: [] })
     setMessage(null)
     const stillCurrent = () => !abort.signal.aborted && shouldUseLocalBundle() && LocalBundleService.getActiveImportId() === snapshot.importId
+    const onDiagnostic = (record: HfDiagnosticRecord) => {
+      if (!stillCurrent()) return
+      setDiagnostics(previous => previous?.runId === runId ? { ...previous, records: [...previous.records, record].slice(-4) } : previous)
+    }
     const update = (claim: HfDryRunClaim, patch: HfClaimRun) => setRun(previous => previous && previous.input === snapshot.input && previous.importId === snapshot.importId
       ? { ...previous, claims: { ...previous.claims, [claim]: { ...previous.claims[claim], ...patch } } }
       : previous)
@@ -168,7 +185,7 @@ export function useMedcloudHfDryRun() {
     try {
       const authPolicy = hfAuthPolicy(policySetting)
       if (authPolicy === 'intranet') {
-        await runAll({ origin, authPolicy, signal: abort.signal }, async () => {})
+        await runAll({ origin, authPolicy, signal: abort.signal, onDiagnostic }, async () => {})
         return
       }
       const auth = await captureHfCallerAuth()
@@ -179,9 +196,10 @@ export function useMedcloudHfDryRun() {
         abort.abort()
         setBusyImportId(null)
         setRun(null)
+        setDiagnostics(null)
         setMessage({ importId: snapshot.importId, code: 'gateway-unauthorized' })
       })
-      const options = { origin, token, signal: abort.signal }
+      const options = { origin, token, signal: abort.signal, onDiagnostic }
       await runAll(options, async () => {
         // Check authorization between validation and prediction as well as after prediction.
         const refreshedToken = await auth.getToken()
@@ -198,7 +216,7 @@ export function useMedcloudHfDryRun() {
     }
   }
   return {
-    current, configured, intranet: policySetting === 'intranet', busy, runs: visibleRuns, message: visibleMessage,
+    current, configured, intranet: policySetting === 'intranet', busy, runs: visibleRuns, message: visibleMessage, diagnostics: visibleDiagnostics, setReportSnapshot,
     /** Changes whenever the active record or its source mode changes. */
     recordKey: snapshot,
     prepare, select, supplementDiagnosis, validate: () => submit('dry-run'), predict: () => submit('predict'),
