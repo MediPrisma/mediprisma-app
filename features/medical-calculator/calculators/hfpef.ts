@@ -1,6 +1,7 @@
 import type { CalculatorDef, NumberInput, SelectInput, CalcValues, L } from '../types'
 import { AGE_INPUT, SEX_INPUT, n, round, HEIGHT_LOINC, WEIGHT_LOINC } from './_shared'
 import type { EchoKey } from '../echo-autofill'
+import { duBoisBsa, indexToBsa } from '../echo-derived'
 
 const label = (en: string, zh = en): L => ({ en, zh })
 const echo = (key: EchoKey, en: string, zh: string, unit = ''): NumberInput => ({
@@ -110,9 +111,9 @@ export const HFPEF: CalculatorDef[] = [{
     // A stated index wins; otherwise index the raw value to Du Bois BSA, which
     // needs both height and weight. Rounded as a report would print it.
     const height = n(v, 'height'), weight = n(v, 'weight'), laVolume = n(v, 'laVolume'), lvMass = n(v, 'lvMass')
-    const bsa = height && weight && height > 0 && weight > 0 ? 0.007184 * weight ** 0.425 * height ** 0.725 : undefined
+    const bsa = duBoisBsa(height, weight)
     // Thresholds are judged on the unrounded index; only the displayed row is rounded.
-    const indexed = (raw: number | undefined) => (bsa && raw && raw > 0 ? raw / bsa : undefined)
+    const indexed = (raw: number | undefined) => indexToBsa(raw, bsa)
     const statedLavi = n(v, 'lavi'), statedLvmi = n(v, 'lvmi')
     const lavi = statedLavi ?? indexed(laVolume), lvmi = statedLvmi ?? indexed(lvMass)
     const laviDerived = statedLavi === undefined && lavi !== undefined, lvmiDerived = statedLvmi === undefined && lvmi !== undefined
