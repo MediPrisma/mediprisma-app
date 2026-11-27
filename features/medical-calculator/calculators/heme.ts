@@ -1,5 +1,11 @@
 import type { CalculatorDef, L } from '../types'
-import { n, round } from './_shared'
+import { n, round, WEIGHT_LOINC } from './_shared'
+
+/** One decimal, with a second where the first would round onto a threshold (19.97 is not shown as 「20」). */
+function tsatDisplay(tsat: number): string {
+  const shown = round(tsat, 1)
+  return (shown === 20 && tsat !== 20) || (shown === 45 && tsat !== 45) ? String(round(tsat, 2)) : String(shown)
+}
 
 export const HEME: CalculatorDef[] = [
   // ── Absolute neutrophil count ───────────────────────────────────────────
@@ -53,5 +59,109 @@ export const HEME: CalculatorDef[] = [
         return { value: String(val), interpretation: interp, severity, extra: [{ label: { en: 'Corrected reticulocyte', zh: '校正網狀紅血球' }, value: `${round(corrected, 1)} %` }] }
       },
       reference: 'RPI = (retic% × Hct/45) / maturation factor. < 2 suggests inadequate marrow response.',
+    },
+
+  // ── Transferrin saturation ───────────────────────────────────────────────
+    {
+      id: 'tsat',
+      name: { en: 'Transferrin Saturation (TSAT)', zh: '運鐵蛋白飽和度 (TSAT)' },
+      category: 'heme',
+      audience: 'medical',
+      blurb: { en: 'Serum iron ÷ TIBC; iron deficiency and overload.', zh: '血清鐵 ÷ TIBC；評估缺鐵與鐵過載。' },
+      inputs: [
+        { key: 'iron', type: 'number', label: { en: 'Serum iron', zh: '血清鐵 (Fe)' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 60, high: 170 }, source: { kind: 'lab', keys: ['IRON'], loinc: ['2498-4'] } },
+        // Filled from the record's TIBC, else the same day's serum iron + UIBC.
+        { key: 'tibc', type: 'number', label: { en: 'TIBC (or serum iron + UIBC)', zh: '總鐵結合能力 (TIBC)（或 Fe＋UIBC）' }, unit: 'µg/dL', dimension: 'iron', normalRange: { low: 250, high: 450 }, source: { kind: 'tibc' } },
+        { key: 'ferritin', type: 'number', label: { en: 'Ferritin (optional)', zh: 'Ferritin（選填）' }, unit: 'ng/mL', dimension: 'ferritin', optional: true, source: { kind: 'lab', keys: ['FERRITIN'] } },
+      ],
+      compute: (v) => {
+        const iron = n(v, 'iron'); const tibc = n(v, 'tibc'); const ferritin = n(v, 'ferritin')
+        if (iron === undefined || iron < 0 || tibc === undefined || tibc <= 0) return null
+        // Thresholds read the unrounded value; rounding is for display only.
+        const tsat = (iron / tibc) * 100
+        let interp: L; let severity: 'normal' | 'moderate'
+        if (tsat < 20) { interp = { en: '< 20% — low: iron deficiency (the ESC 2026 definition in heart failure)', zh: '< 20% — 偏低：缺鐵（ESC 2026 心衰竭以此定義缺鐵）' }; severity = 'moderate' }
+        else if (tsat <= 45) { interp = { en: '20–45% — within the usual range', zh: '20–45% — 一般範圍' }; severity = 'normal' }
+        else { interp = { en: '> 45% — high: consider iron overload; repeat fasting', zh: '> 45% — 偏高：考慮鐵過載，建議空腹複驗' }; severity = 'moderate' }
+        const extra: { label: L; value: string }[] = []
+        if (ferritin !== undefined) {
+          // ESC 2021: ferritin < 100 ng/mL, or 100–299 ng/mL with TSAT < 20%.
+          const met = ferritin < 100 || (ferritin < 300 && tsat < 20)
+          extra.push({
+            label: { en: 'Older HF definition (ESC 2021: ferritin < 100, or 100–299 with TSAT < 20%)', zh: '心衰竭舊定義（ESC 2021：ferritin < 100，或 100–299 且 TSAT < 20%）' },
+            value: `${met ? '✓' : '✗'} ferritin ${ferritin}`,
+          })
+        }
+        return {
+          numericValue: tsat, value: tsatDisplay(tsat), unit: '%', interpretation: interp, severity, extra,
+          ...(tsat > 100 ? { notes: { en: 'Serum iron exceeds TIBC: check the values and their units.', zh: '血清鐵大於 TIBC：請核對數值與單位。' } } : {}),
+        }
+      },
+      coherence: { keys: ['iron', 'tibc'], windowDays: 0 },
+      reference: 'TSAT (%) = serum iron / TIBC × 100; TIBC = serum iron + UIBC. ESC 2026 heart failure guideline §10.4: iron deficiency is TSAT < 20%.',
+    },
+
+  // ── Ganzoni total iron deficit ───────────────────────────────────────────
+    {
+      id: 'iron-deficit-ganzoni',
+      name: { en: 'Iron Deficit (Ganzoni)', zh: '缺鐵量估算 (Ganzoni)' },
+      category: 'heme',
+      audience: 'medical',
+      blurb: { en: 'Total iron to replace in iron-deficiency anemia.', zh: '缺鐵性貧血需補足的總鐵量。' },
+      inputs: [
+        { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
+        { key: 'hb', type: 'number', label: { en: 'Hemoglobin', zh: '血色素' }, unit: 'g/dL', dimension: 'hemoglobin', normalRange: { low: 12, high: 16 }, source: { kind: 'lab', keys: ['HB'] } },
+        { key: 'target', type: 'number', label: { en: 'Target hemoglobin', zh: '目標血色素' }, unit: 'g/dL', defaultValue: '15' },
+        { key: 'stores', type: 'number', label: { en: 'Iron stores', zh: '儲存鐵' }, unit: 'mg', defaultValue: '500' },
+      ],
+      compute: (v) => {
+        const weight = n(v, 'weight'); const hb = n(v, 'hb'); const target = n(v, 'target'); const stores = n(v, 'stores')
+        if (weight === undefined || hb === undefined || target === undefined || stores === undefined) return null
+        if (weight <= 0 || hb <= 0 || target <= 0 || stores < 0) return null
+        // Nothing to replace for hemoglobin once it is at the target: the stores remain.
+        const forHb = Math.max(0, weight * (target - hb) * 2.4)
+        const deficit = forHb + stores
+        return {
+          numericValue: deficit, value: String(Math.round(deficit)), unit: 'mg',
+          interpretation: { en: 'Total iron deficit', zh: '總缺鐵量' },
+          extra: [
+            { label: { en: 'For hemoglobin', zh: '補足血色素' }, value: `${Math.round(forHb)} mg` },
+            { label: { en: 'Iron stores', zh: '儲存鐵' }, value: `${Math.round(stores)} mg` },
+          ],
+          notes: {
+            en: 'An estimate of the total dose. The dose per infusion and its maximum follow each product’s label.',
+            zh: '此為總量估算；單次劑量與上限依各鐵劑仿單。',
+          },
+        }
+      },
+      reference: 'Ganzoni AM. Schweiz Med Wochenschr 1970;100:301–3. Iron deficit (mg) = weight (kg) × (target Hb − actual Hb) (g/dL) × 2.4 + iron stores (mg).',
+    },
+
+  // ── Mentzer index ────────────────────────────────────────────────────────
+    {
+      id: 'mentzer-index',
+      name: { en: 'Mentzer Index', zh: 'Mentzer 指數' },
+      category: 'heme',
+      audience: 'medical',
+      blurb: { en: 'Microcytic anemia: iron deficiency or thalassemia trait.', zh: '小球性貧血：缺鐵或地中海型貧血帶因。' },
+      inputs: [
+        { key: 'mcv', type: 'number', label: { en: 'MCV', zh: '平均紅血球容積 (MCV)' }, unit: 'fL', normalRange: { low: 80, high: 100 }, source: { kind: 'lab', keys: ['MCV'] } },
+        { key: 'rbc', type: 'number', label: { en: 'RBC count', zh: '紅血球數 (RBC)' }, unit: '10⁶/µL', dimension: 'rbc', normalRange: { low: 4, high: 5.5 }, source: { kind: 'lab', keys: ['RBC'] } },
+      ],
+      compute: (v) => {
+        const mcv = n(v, 'mcv'); const rbc = n(v, 'rbc')
+        if (mcv === undefined || rbc === undefined || mcv <= 0 || rbc <= 0) return null
+        const index = mcv / rbc
+        // The threshold reads the unrounded index; a value that rounds to 13 is shown with one more decimal.
+        const interp: L = index < 13
+          ? { en: '< 13 — thalassemia trait more likely', zh: '< 13 — 較像地中海型貧血帶因' }
+          : index > 13
+            ? { en: '> 13 — iron deficiency more likely', zh: '> 13 — 較像缺鐵性貧血' }
+            : { en: '13 — indeterminate', zh: '13 — 無法區分' }
+        const val = index !== 13 && round(index, 1) === 13 ? round(index, 2) : round(index, 1)
+        return { numericValue: index, value: String(val), interpretation: interp, severity: 'normal' }
+      },
+      coherence: { keys: ['mcv', 'rbc'], windowDays: 0 },
+      reference: 'Mentzer WC. Lancet 1973;1:882. Mentzer index = MCV (fL) / RBC (10⁶/µL).',
     },
 ]

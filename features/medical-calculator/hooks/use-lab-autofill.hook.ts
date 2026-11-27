@@ -139,6 +139,11 @@ function unitOkForVital(kind: VitalKind, unit: string): boolean {
   return /^mmhg$/.test(u) // sbp
 }
 
+
+// Iron studies: the canonical map names serum iron and TIBC but holds no LOINC for them.
+const IRON_LOINC = '2498-4'
+const TIBC_LOINC = '2500-7'
+const UIBC_LOINC = '2501-5'
 /**
  * Pure autofill-index builder — indexes each observation (and, for panels like
  * blood pressure, each `component`) by canonical analyte key, by LOINC code, and
@@ -274,6 +279,17 @@ export function buildAutofill(
         // One decimal, as BMI is reported — not 32.847300112161506.
         return { ...weight, value: Math.round((kg / (cm / 100) ** 2) * 10) / 10, unit: 'kg/m²', testName: 'BMI（同日身高與體重）' }
       }
+      case 'tibc': {
+        const direct = byLoinc[TIBC_LOINC] ?? bySpecimen['blood|TIBC'] ?? byNonUrine.TIBC
+        if (direct) return direct
+        const iron = byLoinc[IRON_LOINC] ?? bySpecimen['blood|IRON'] ?? byNonUrine.IRON
+        const uibc = byLoinc[UIBC_LOINC]
+        if (!iron || !uibc || !iron.date || iron.date.slice(0, 10) !== uibc.date.slice(0, 10)) return undefined
+        const fe = convertToBase(iron.value, iron.unit, 'iron')?.value
+        const unbound = convertToBase(uibc.value, uibc.unit, 'iron')?.value
+        if (fe === undefined || unbound === undefined || fe < 0 || unbound < 0) return undefined
+        return { ...uibc, value: Math.round((fe + unbound) * 10) / 10, unit: 'µg/dL', testName: 'TIBC（同日 Fe＋UIBC）' }
+      }
       case 'lab':
         // Prefer a blood-specimen match so a serum analyte never picks up a
         // same-named urine value (urine Na also canonicalises to NA); fall
@@ -281,6 +297,9 @@ export function buildAutofill(
         // bundles omit the field). A urine row is never a serum value: with
         // the serum row unmarked and the urine row marked, the urine
         // creatinine used to fill eGFR and CrCl.
+        for (const code of source.loinc ?? []) {
+          if (byLoinc[code]) return byLoinc[code]
+        }
         for (const k of source.keys) {
           if (bySpecimen[`blood|${k}`]) return bySpecimen[`blood|${k}`]
         }

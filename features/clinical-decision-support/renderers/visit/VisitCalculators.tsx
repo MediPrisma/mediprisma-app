@@ -64,6 +64,9 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // 2026-10-21: CDSS = guideline, label = calculator); its card names it.
   { id: 'doac-dose', dp: 'DP-09', source: 'af', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/ },
   { id: 'doac-periop', dp: 'DP-09', source: 'af', calculatorId: 'doac-periop', names: /DOAC 手術前後停藥計算機|DOAC peri-procedural calculator/ },
+  // DP-12 reads a TSAT the record reports; a lab that gives serum iron and TIBC
+  // leaves it to this (owner request 2026-11-27), attached to the point as a note.
+  { id: 'tsat', dp: 'DP-12', calculatorId: 'tsat', names: /TSAT/, note: true },
   { id: 'maggic', dp: 'DP-19', prognosis: 'maggic', names: /MAGGIC/, note: true },
   { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', names: /LIFE[-‐–]Preserved/, note: true },
   { id: 'shfm', dp: 'DP-19', prognosis: 'shfm', names: /SHFM|Seattle Heart Failure Model/ },
