@@ -104,8 +104,8 @@ describe('echo chamber calculator', () => {
     ])
     expect(result.value).toBe('▲ 3 / 6')
     // What could not be indexed is said in the summary line, where it is read first.
-    expect(result.interpretation!.zh).toBe('超出範圍：LVIDd、LV mass、TR Vmax（缺身高／體重，未算 LVMI、LAVI）')
-    expect(result.interpretation!.en).toMatch(/LVMI, LAVI not calculated: height or weight missing/)
+    expect(result.interpretation!.zh).toBe('超出範圍：LVIDd、LV mass、TR Vmax（缺 BSA，未算 LVMI、LAVI）')
+    expect(result.interpretation!.en).toMatch(/no BSA: LVMI, LAVI not calculated/)
   })
 
   test('LVEF is shown but never graded or counted', () => {
