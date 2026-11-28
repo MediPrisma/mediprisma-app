@@ -635,7 +635,12 @@ function PageContent() {
             <div className="flex h-8 w-8 items-center justify-center overflow-hidden max-[359px]:hidden">
               <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="App Icon" className="h-full w-full object-contain" />
             </div>
-            <h1 className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
+            {/* Below 768px the patient takes the brand's place in this row
+                (the logo stays), so the name, age and sex no longer need a
+                row of their own (#657). */}
+            <h1 className={patient
+              ? "min-w-0 truncate text-sm font-semibold tracking-tight text-foreground max-md:hidden sm:text-base"
+              : "min-w-0 truncate text-sm font-semibold tracking-tight text-foreground sm:text-base"}>
               <span>MediPrisma</span>
               <span className="max-lg:hidden @max-[80rem]:hidden"> · SMART on FHIR</span>
             </h1>
@@ -677,7 +682,6 @@ function PageContent() {
       </header>
       )}
 
-      {!embedCompact && <ClinicalPatientContext patient={patient} variant="mobile" />}
       
       {/* Email Verification Banner */}
       <div className="px-3 sm:px-6">
