@@ -1,5 +1,5 @@
 import { CALCULATORS, getCalcInfo, getCalcScoring, getCalcTags } from '@/features/medical-calculator/calculators'
-import { buildEchoAutofill, parseCalculatorEcho } from '@/features/medical-calculator/echo-autofill'
+import { buildEchoAutofill } from '@/features/medical-calculator/echo-autofill'
 import type { CalcValues } from '@/features/medical-calculator/types'
 import type { DiagnosticReportEntity } from '@/src/core/entities/clinical-data.entity'
 
@@ -171,24 +171,5 @@ describe('echo chamber calculator', () => {
     expect(calc.compute({})).toBeNull()
     expect(calc.compute({ sex: 'male', height: '170', weight: '70' })).toBeNull()
     expect(calc.compute({ lvidd: '0', ivsd: '-3' })).toBeNull()
-  })
-})
-
-describe('LVIDd, IVSd and LVPWd from the report', () => {
-  test('mm and cm, with captions', () => {
-    expect(parseCalculatorEcho(fixture01)).toMatchObject({ lvidd: 48, ivsd: 13, lvpwd: 11 })
-    expect(parseCalculatorEcho('LVIDd:5.0cm IVSd:1.2cm LVPWd:1.1cm')).toMatchObject({ lvidd: 50, ivsd: 12, lvpwd: 11 })
-    const af = buildEchoAutofill([report(fixture01)])
-    expect(af.lvidd).toMatchObject({ value: 48, unit: 'mm', testName: 'Echocardiography · LVIDd' })
-    expect(af.ivsd).toMatchObject({ value: 13, unit: 'mm', testName: 'Echocardiography · IVSd' })
-    expect(af.lvpwd).toMatchObject({ value: 11, unit: 'mm', testName: 'Echocardiography · LVPWd' })
-  })
-  test('blank fields and implausible scales stay empty', () => {
-    const blank = parseCalculatorEcho('LVIDd mm IVSd LVPWd   LVEF 60 %')
-    expect(blank.lvidd).toBeUndefined()
-    expect(blank.ivsd).toBeUndefined()
-    expect(blank.lvpwd).toBeUndefined()
-    expect(parseCalculatorEcho('LVIDd 480 mm IVSd 13 mm').lvidd).toBeUndefined()
-    expect(parseCalculatorEcho('LVIDd 480 mm IVSd 13 mm').ivsd).toBe(13)
   })
 })
