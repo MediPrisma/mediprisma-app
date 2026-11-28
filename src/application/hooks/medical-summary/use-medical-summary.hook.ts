@@ -101,6 +101,7 @@ import { measureSummaryCardOutcomes } from './summary-result-measurement'
 import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import type { AiRunMetrics } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { nowMs } from '@/src/application/telemetry/ai-outcome'
+import { sendSummaryFailureReport } from '@/src/application/telemetry/summary-report'
 import { taipeiDay } from '@/src/core/utils/calendar-day'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
@@ -284,7 +285,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     )
   ), [])
 
-  const run = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
+  const runOnce = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
     // Monotonic: the number the redesign is judged on is "how long until the
     // clinician sees the first section", which a wall-clock adjustment must
     // not be able to change.
@@ -1002,6 +1003,26 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       generation: generation(generatedAt),
     }
   }, [])
+
+  // A card left in cardErrors, or a run that threw, has already been through
+  // the lanes' own retry: it failed twice. On the 北榮 entry that run is sent
+  // to the in-hospital Collector automatically (see sendSummaryFailureReport).
+  // A user stop is not a failure.
+  const run = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
+    const report = () => sendSummaryFailureReport(
+      useAiExecutionDiagnosticsStore.getState().records,
+      useAiExecutionDiagnosticsStore.getState().summaryRuns[ctx.operationKey],
+    )
+    let result: MedicalSummaryResult | null
+    try {
+      result = await runOnce(ctx)
+    } catch (error) {
+      if (!ctx.signal?.aborted && !(error instanceof Error && error.name === 'AbortError')) report()
+      throw error
+    }
+    if (result?.cardErrors && !ctx.signal?.aborted) report()
+    return result
+  }, [runOnce])
 
   // Demo bundle: runs through the SAME parse → finalize pipeline as a live
   // reply, so citations verify against the real catalog.

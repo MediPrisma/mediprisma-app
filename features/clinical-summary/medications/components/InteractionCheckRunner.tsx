@@ -6,6 +6,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useMedications } from '../hooks/useMedications'
 import { useMedicationRows } from '../hooks/useMedicationRows'
 import { useInteractionCheckStore, useRunInteractionCheck } from '../hooks/useInteractionCheck'
+import { ddiServiceOrigin } from '../hooks/hospital-service-reach'
 import { partitionMedicationRecords } from '../utils/remaining-supply'
 
 /**
@@ -14,7 +15,7 @@ import { partitionMedicationRecords } from '../utils/remaining-supply'
  * Renders nothing. Builds without the service skip the list work entirely.
  */
 export function InteractionCheckRunner() {
-  if (!process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN) return null
+  if (!ddiServiceOrigin()) return null
   return <ConfiguredInteractionCheckRunner />
 }
 

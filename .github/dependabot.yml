@@ -7,12 +7,18 @@ registries:
     url: https://npm.pkg.github.com
     scope: "@voho0000"
     token: ${{secrets.PACKAGES_TOKEN}}
+  mediprisma-github-packages:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    scope: "@mediprisma"
+    token: ${{secrets.PACKAGES_TOKEN}}
 
 updates:
   - package-ecosystem: npm
     directory: "/"
     registries:
       - voho0000-github-packages
+      - mediprisma-github-packages
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

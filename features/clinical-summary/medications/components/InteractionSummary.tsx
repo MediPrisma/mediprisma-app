@@ -11,7 +11,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { MedicationRow } from '../types'
-import { attentionFindings, type InteractionFinding, type InteractionReview, type InteractionSeverity } from '../utils/interaction-check'
+import { attentionFindings, type InteractionFinding, type InteractionReview, type InteractionSeverity } from '@mediprisma/vghtpe-ddi-check'
 
 interface InteractionSummaryProps {
   review: InteractionReview

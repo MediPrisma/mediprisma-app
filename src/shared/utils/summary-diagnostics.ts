@@ -39,7 +39,7 @@ export function redactDiagnosticText(text: string, secret?: string | null): stri
     .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, '[REDACTED]')
 }
 
-export function buildSummaryReport(records: AiExecutionDiagnosticRecord[]) {
+export function buildSummaryReport(records: AiExecutionDiagnosticRecord[], source?: AiReport['source']) {
   const executions = records.filter(r => r.technical).map(r => ({
     timestamp: r.timestamp, status: r.status, technical: r.technical,
     outcome: r.outcome,
@@ -49,6 +49,7 @@ export function buildSummaryReport(records: AiExecutionDiagnosticRecord[]) {
   const report = aiReportSchema.parse({
     schema_version: 1, submission_id: diagnosticUuid(), consent: true,
     created_at: new Date().toISOString(),
+    ...(source ? { source } : {}),
     executions,
   })
   const json = JSON.stringify(report, null, 2)

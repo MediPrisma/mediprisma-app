@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
-import { probeService } from './hospital-service-reach'
+import { ddiServiceOrigin, probeService } from './hospital-service-reach'
 import type { MedicationRow } from '../types'
 import {
   interactionCheckBody,
   interpretInteractionCheck,
   planInteractionCheck,
   type InteractionReview,
-} from '../utils/interaction-check'
+} from '@mediprisma/vghtpe-ddi-check'
 
 const TIMEOUT_MS = 8000
 // While Chrome is still asking whether this page may reach the hospital
@@ -50,7 +50,7 @@ type Outcome =
  */
 export function useRunInteractionCheck(rows: MedicationRow[], options: { enabled: boolean; ready: boolean }) {
   const { enabled, ready } = options
-  const origin = process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN ?? ''
+  const origin = ddiServiceOrigin()
   const plan = useMemo(() => planInteractionCheck(rows), [rows])
   // Re-ask whenever the plan changes, not on every re-render of the same
   // list. The answer is indexed by request position and read back against row

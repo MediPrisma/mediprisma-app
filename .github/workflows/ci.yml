@@ -40,11 +40,12 @@ jobs:
       - name: Verify optional integrations
         run: |
           npm run test:optional
-          node --input-type=module -e "import assert from 'node:assert/strict'; import { detectOptionalPackages } from './scripts/optional-package-state.mjs'; assert.deepEqual(detectOptionalPackages(process.cwd()), { labs: false, care: false, education: false, fhir: false })"
+          node --input-type=module -e "import assert from 'node:assert/strict'; import { detectOptionalPackages } from './scripts/optional-package-state.mjs'; assert.deepEqual(detectOptionalPackages(process.cwd()), { labs: false, care: false, education: false, fhir: false, ddi: false })"
       - name: Public calculator and education regressions
         env:
           TEST_OPTIONAL_EDUCATION: "missing"
-        run: npm test -- --ci --runInBand --runTestsByPath __tests__/features/medical-calculator/coded-report-autofill.test.ts __tests__/features/medical-calculator/hfpef-clinical-autofill.test.ts __tests__/features/medical-calculator/echo-paired-velocity.test.ts __tests__/shared/optional-education-content.test.tsx
+          TEST_OPTIONAL_DDI: "missing"
+        run: npm test -- --ci --runInBand --runTestsByPath __tests__/features/medical-calculator/coded-report-autofill.test.ts __tests__/features/medical-calculator/hfpef-clinical-autofill.test.ts __tests__/features/medical-calculator/echo-paired-velocity.test.ts __tests__/shared/optional-education-content.test.tsx __tests__/features/clinical-summary/medications/ddi-shared-package.test.ts
       - name: Build without private packages or SDK artifact
         env:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"

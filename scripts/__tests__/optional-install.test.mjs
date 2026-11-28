@@ -15,7 +15,7 @@ test('all GitHub Packages dependencies are optional in both manifests', () => {
     assert.equal(lock.packages[''].optionalDependencies[name], version)
     assert.equal(lock.packages[`node_modules/${name}`].optional, true)
   }
-  assert.equal(Object.keys(pkg.optionalDependencies).length, 5)
+  assert.equal(Object.keys(pkg.optionalDependencies).length, 6)
 })
 
 test('missing GitHub CLI login does not block npm; supplied tokens bypass gh', () => {
@@ -45,28 +45,34 @@ test('availability checks entrypoints and transitive requirements', async () => 
   const { detectOptionalPackages } = await import('../optional-package-state.mjs')
   const root = process.cwd()
   const none = () => { throw new Error('unavailable') }
-  assert.deepEqual(detectOptionalPackages(root, none), { labs: false, care: false, education: false, fhir: false })
+  assert.deepEqual(detectOptionalPackages(root, none), { labs: false, care: false, education: false, fhir: false, ddi: false })
   const all = (entry) => entry
-  assert.deepEqual(detectOptionalPackages(root, all), { labs: true, care: true, education: true, fhir: true })
+  assert.deepEqual(detectOptionalPackages(root, all), { labs: true, care: true, education: true, fhir: true, ddi: true })
   const withoutCare = (entry) => {
     if (entry.startsWith('@voho0000/personalized-care')) throw new Error('unavailable')
     return entry
   }
-  assert.deepEqual(detectOptionalPackages(root, withoutCare), { labs: true, care: false, education: true, fhir: false })
+  assert.deepEqual(detectOptionalPackages(root, withoutCare), { labs: true, care: false, education: true, fhir: false, ddi: true })
   const withoutLabExport = (entry) => {
     if (entry.endsWith('/interpretation')) throw new Error('incomplete package')
     return entry
   }
-  assert.deepEqual(detectOptionalPackages(root, withoutLabExport), { labs: false, care: false, education: false, fhir: false })
+  assert.deepEqual(detectOptionalPackages(root, withoutLabExport), { labs: false, care: false, education: false, fhir: false, ddi: true })
+  const withoutDdi = (entry) => {
+    if (entry.startsWith('@mediprisma/')) throw new Error('unavailable')
+    return entry
+  }
+  assert.deepEqual(detectOptionalPackages(root, withoutDdi), { labs: true, care: true, education: true, fhir: true, ddi: false })
 })
 
 test('full builds use the real modules; absent CDSS and SDK are independent', async () => {
   const { optionalBuildConfig } = await import('../optional-build-config.mjs')
-  const all = { labs: true, care: true, education: true, fhir: true }
+  const all = { labs: true, care: true, education: true, fhir: true, ddi: true }
   const complete = optionalBuildConfig(process.cwd(), { state: all, sdkImport: true })
   assert.deepEqual(complete.aliases, {})
   assert.equal(complete.env.NEXT_PUBLIC_CDSS_AVAILABLE, 'true')
   assert.equal(complete.env.NEXT_PUBLIC_SDK_IMPORT_AVAILABLE, 'true')
+  assert.equal(complete.env.NEXT_PUBLIC_DDI_CHECK_AVAILABLE, 'true')
   const noCdss = optionalBuildConfig(process.cwd(), { state: { ...all, care: false, fhir: false }, sdkImport: true })
   assert.equal(noCdss.env.NEXT_PUBLIC_CDSS_AVAILABLE, 'false')
   assert.equal(noCdss.env.NEXT_PUBLIC_SDK_IMPORT_AVAILABLE, 'true')
@@ -80,6 +86,19 @@ test('full builds use the real modules; absent CDSS and SDK are independent', as
   assert.equal(noSdk.aliases['@/vendor/nhi-fhir-bridge-sdk-json/browser.js'], './src/optional/sdk-json.ts')
 })
 
+test('without the interaction package the check is off, and a build configured for it fails', async () => {
+  const { optionalBuildConfig, assertConfiguredPackages } = await import('../optional-build-config.mjs')
+  const all = { labs: true, care: true, education: true, fhir: true, ddi: true }
+  const noDdi = optionalBuildConfig(process.cwd(), { state: { ...all, ddi: false }, sdkImport: true })
+  assert.equal(noDdi.env.NEXT_PUBLIC_DDI_CHECK_AVAILABLE, 'false')
+  assert.equal(noDdi.aliases['@mediprisma/vghtpe-ddi-check'], './src/optional/ddi-check.ts')
+  assert.equal(noDdi.env.NEXT_PUBLIC_CDSS_AVAILABLE, 'true')
+  const origin = { NEXT_PUBLIC_DDI_SERVICE_ORIGIN: 'https://ddi.example.test' }
+  assert.throws(() => assertConfiguredPackages(noDdi, origin), /@mediprisma\/vghtpe-ddi-check is not installed.*NODE_AUTH_TOKEN/s)
+  assert.doesNotThrow(() => assertConfiguredPackages(noDdi, {}))
+  assert.doesNotThrow(() => assertConfiguredPackages(optionalBuildConfig(process.cwd(), { state: all, sdkImport: true }), origin))
+})
+
 test('generated type config replaces a symlink without modifying its target', { skip: process.platform === 'win32' }, async () => {
   const { optionalBuildConfig, writeOptionalBuildTsconfig } = await import('../optional-build-config.mjs')
   const root = mkdtempSync(join(tmpdir(), 'optional-tsconfig-'))
@@ -90,7 +109,7 @@ test('generated type config replaces a symlink without modifying its target', { 
     const target = join(root, 'tsconfig.optional.generated.json')
     symlinkSync(protectedFile, target)
     const config = optionalBuildConfig(root, {
-      state: { labs: false, care: false, education: false, fhir: false }, sdkImport: false,
+      state: { labs: false, care: false, education: false, fhir: false, ddi: false }, sdkImport: false,
     })
     assert.equal(writeOptionalBuildTsconfig(root, config), 'tsconfig.optional.generated.json')
     assert.equal(readFileSync(protectedFile, 'utf8'), 'keep this content')
