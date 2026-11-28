@@ -23,24 +23,20 @@ describe('ClinicalPatientContext', () => {
     localStorage.clear()
   })
 
-  it.each(['header', 'mobile'] as const)(
-    'shows only name, age, and gender in the %s context',
-    (variant) => {
-      render(
-        <LanguageProvider>
-          <ClinicalPatientContext patient={patient} variant={variant} />
-        </LanguageProvider>,
-      )
+  it('shows only name, age, and gender, in the header on every width', () => {
+    render(
+      <LanguageProvider>
+        <ClinicalPatientContext patient={patient} variant="header" />
+      </LanguageProvider>,
+    )
 
-      const context = screen.getByLabelText('病人資訊 · 王小明 · 42歲 · 男性')
-      expect(context).toHaveTextContent('王小明·42歲·男性')
-      expect(context).not.toHaveTextContent(patient.id)
-      expect(context.getAttribute('aria-label')).not.toContain(patient.id)
-      if (variant === 'mobile') {
-        expect(context).toHaveClass('min-h-[40px]')
-      }
-    },
-  )
+    const context = screen.getByLabelText('病人資訊 · 王小明 · 42歲 · 男性')
+    expect(context).toHaveTextContent('王小明·42歲·男性')
+    expect(context).not.toHaveTextContent(patient.id)
+    expect(context.getAttribute('aria-label')).not.toContain(patient.id)
+    // Narrow screens no longer give the patient a row of their own (#657).
+    expect(context.className).not.toMatch(/max-md:hidden/)
+  })
 
   it('shows the supplied Romanized name in the English context', async () => {
     localStorage.setItem('medical-note-locale', 'en')

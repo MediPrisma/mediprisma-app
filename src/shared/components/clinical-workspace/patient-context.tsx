@@ -13,7 +13,7 @@ import { cn } from "@/src/shared/utils/cn.utils"
 interface ClinicalPatientContextProps
   extends Omit<ComponentPropsWithoutRef<"div">, "children"> {
   patient: PatientEntity | null
-  variant?: "header" | "mobile"
+  variant?: "header"
 }
 
 export function ClinicalPatientContext({
@@ -53,9 +53,7 @@ export function ClinicalPatientContext({
       className={cn(
         "min-w-0 items-center gap-2 text-xs text-muted-foreground",
         variant === "header" &&
-          "flex flex-1 border-l-2 border-primary/35 px-3 max-md:hidden",
-        variant === "mobile" &&
-          "flex min-h-[40px] shrink-0 border-b border-border bg-card px-3 md:hidden",
+          "flex flex-1 border-l-2 border-primary/35 px-3 max-md:gap-1.5 max-md:border-l-0 max-md:px-0",
         className,
       )}
       {...props}

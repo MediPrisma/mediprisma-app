@@ -137,7 +137,7 @@ export function ClinicalMobilePanelSwitcher({
   onChange,
 }: ClinicalMobilePanelSwitcherProps) {
   const buttonClasses =
-    "h-[40px] min-h-[40px] flex-1 border-b-2 px-4 py-0 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+    "h-[40px] min-h-[40px] flex-1 border-b-2 px-4 py-0 text-sm font-semibold pointer-fine:h-[32px] pointer-fine:min-h-[32px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
 
   return (
     <nav
