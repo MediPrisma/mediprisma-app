@@ -25,6 +25,7 @@ import {
 import { ClinicalTabActivityProvider } from "@/src/application/providers/clinical-tab-activity.provider"
 import { LoaderCircle } from "lucide-react"
 import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
+import { useEmbedViewStore } from "@/src/application/stores/embed-view.store"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -162,6 +163,23 @@ export default function ClinicalSummaryFeature() {
     // seq re-fires this even when navigating to the same target twice.
   }, [pending, seq, tabs, clearDetail])
 
+  // The page framing this app asked for a tab (stores/embed-view.store.ts),
+  // and is told which one is open and which this patient has.
+  const embedCompact = useEmbedViewStore((s) => s.compact)
+  const embedRequest = useEmbedViewStore((s) => s.leftRequest)
+  const setEmbedLeftTabs = useEmbedViewStore((s) => s.setLeftTabs)
+  const listedTabIds = tabs.map((tab) => tab.id).join()
+  useEffect(() => {
+    setEmbedLeftTabs(activeTab, listedTabIds.split(','))
+  }, [activeTab, listedTabIds, setEmbedLeftTabs])
+  useEffect(() => {
+    const target = embedRequest?.tab
+    if (!target || !listedTabIds.split(',').includes(target)) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveTab(target)
+    clearDetail()
+  }, [embedRequest, listedTabIds, clearDetail])
+
   // A tour step should demonstrate the actual feature rather than merely
   // pointing at a hidden tab. Preserve the user's starting tab and restore it
   // when the tour is finished or skipped.
@@ -278,9 +296,10 @@ export default function ClinicalSummaryFeature() {
             length, so the column template goes via inline style. The label
             already uses `truncate` + a `title` tooltip, so narrower per-tab
             widths still render the full label on hover. */}
+        {/* In the 精簡 mode the framing page's own tabs stand in for this row. */}
         <ClinicalTabList
           data-tour="left-tabs"
-          className="grid gap-1"
+          className={embedCompact ? "hidden" : "grid gap-1"}
           style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
         >
           {tabs.map(tab => {

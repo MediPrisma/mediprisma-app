@@ -20,11 +20,15 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
 const revealTab = jest.fn()
 const revealRecord = jest.fn()
 jest.mock('@/src/application/providers/right-panel.provider', () => ({
-  useRightPanel: () => ({ revealTab: (...args: unknown[]) => revealTab(...args), revealRecord: () => revealRecord() }),
+  useRightPanel: () => ({ revealTab: (...args: unknown[]) => revealTab(...args), revealRecord: () => revealRecord(), summaryView: 'standard' }),
+}))
+jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
+  usePatient: () => ({ patient: { id: 'sim-v01' } }),
 }))
 
-import { isAllowedEmbedParent, isEmbedImportMessage, patientIdsOf } from '@/features/import-bundle/services/embedded-import'
+import { isAllowedEmbedParent, isEmbedImportMessage, isEmbedNavigateMessage, patientIdsOf, shownView } from '@/features/import-bundle/services/embedded-import'
 import { useEmbeddedImport } from '@/features/import-bundle/hooks/useEmbeddedImport'
+import { useEmbedViewStore } from '@/src/application/stores/embed-view.store'
 
 const ASSISTANT = 'https://opd-ai-agent.mediprisma.tw'
 const bundle = (id: string) => ({ resourceType: 'Bundle', type: 'collection', entry: [{ resource: { resourceType: 'Patient', id } }] })
@@ -65,6 +69,7 @@ describe('useEmbeddedImport', () => {
     revealRecord.mockReset()
     load.mockReset().mockResolvedValue(['sim-v01'])
     parent.postMessage.mockReset()
+    useEmbedViewStore.setState({ compact: false, leftRequest: null, leftTab: null, listedLeftTabs: [], rightTab: null, listedRightTabs: [], panel: 'left' })
     Object.defineProperty(window, 'parent', { configurable: true, value: parent })
   })
   afterEach(() => Object.defineProperty(window, 'parent', original))
@@ -84,7 +89,7 @@ describe('useEmbeddedImport', () => {
     const file = importFile.mock.calls[0][0] as File
     const text = await new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsText(file) })
     expect(text).toBe(JSON.stringify(bundle('sim-v01')))
-    expect(parent.postMessage).toHaveBeenLastCalledWith(
+    expect(parent.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'mediprisma:embed-imported', requestId: 'r7', ok: true, patientIds: ['sim-v01'] }), ASSISTANT)
   })
 
@@ -151,20 +156,79 @@ describe('useEmbeddedImport', () => {
     renderHook(() => useEmbeddedImport())
     await send(navigateMessage('custom-summary', 'n2'), ASSISTANT)
     expect(revealTab).toHaveBeenCalledWith('medical-summary', { summaryView: 'custom' })
-    expect(parent.postMessage).toHaveBeenLastCalledWith(
+    expect(parent.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'mediprisma:embed-navigated', requestId: 'n2', ok: true, view: 'custom-summary' }), ASSISTANT)
     await send(navigateMessage('record', 'n3'), ASSISTANT)
     expect(revealRecord).toHaveBeenCalledTimes(1)
-    expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n3', ok: true, view: 'record' }), ASSISTANT)
+    expect(parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'n3', ok: true, view: 'record' }), ASSISTANT)
   })
 
   it('answers a view it does not have as not shown, and moves nothing for another origin', async () => {
     renderHook(() => useEmbeddedImport())
     await send(navigateMessage('custom-summary'), 'https://example.com')
-    await send(navigateMessage('last-visit', 'n4'), ASSISTANT)
+    await send(navigateMessage('timeline', 'n4'), ASSISTANT)
     expect(revealTab).not.toHaveBeenCalled()
     expect(revealRecord).not.toHaveBeenCalled()
     expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n4', ok: false }), ASSISTANT)
+  })
+
+  it('opens any clinical tab, or 標準摘要, and answers with the view, the mode and the patient', async () => {
+    useEmbedViewStore.setState({ listedLeftTabs: ['overview', 'patient', 'visits', 'reports', 'meds', 'documents'], leftTab: 'overview' })
+    renderHook(() => useEmbeddedImport())
+    await send({ ...navigateMessage('meds', 'n5'), compact: true }, ASSISTANT)
+    expect(useEmbedViewStore.getState().leftRequest?.tab).toBe('meds')
+    expect(useEmbedViewStore.getState().compact).toBe(true)
+    expect(revealRecord).toHaveBeenCalledTimes(1)
+    expect(parent.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'mediprisma:embed-navigated', requestId: 'n5', ok: true, view: 'meds', compact: true, patientIds: ['sim-v01'] }), ASSISTANT)
+    await send(navigateMessage('standard-summary', 'n6'), ASSISTANT)
+    expect(revealTab).toHaveBeenCalledWith('medical-summary', { summaryView: 'standard' })
+    // A message that does not name the mode leaves it as it is.
+    expect(useEmbedViewStore.getState().compact).toBe(true)
+    await send({ ...navigateMessage('record', 'n7'), compact: false }, ASSISTANT)
+    expect(useEmbedViewStore.getState().compact).toBe(false)
+  })
+
+  it('opens 安全 only where this browser has it', async () => {
+    renderHook(() => useEmbeddedImport())
+    await send(navigateMessage('safety', 'n9'), ASSISTANT)
+    expect(revealTab).not.toHaveBeenCalled()
+    expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n9', ok: false }), ASSISTANT)
+    useEmbedViewStore.setState({ listedRightTabs: ['medical-summary', 'medication-safety'] })
+    await send(navigateMessage('safety', 'n10'), ASSISTANT)
+    expect(revealTab).toHaveBeenCalledWith('medication-safety')
+    expect(parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'n10', ok: true, view: 'safety' }), ASSISTANT)
+  })
+
+  it('answers a tab this patient does not have as not shown, and moves nothing', async () => {
+    useEmbedViewStore.setState({ listedLeftTabs: ['overview', 'patient'] })
+    renderHook(() => useEmbeddedImport())
+    await send(navigateMessage('last-outpatient', 'n8'), ASSISTANT)
+    expect(revealRecord).not.toHaveBeenCalled()
+    expect(useEmbedViewStore.getState().leftRequest).toBeNull()
+    expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n8', ok: false }), ASSISTANT)
+  })
+
+  it('takes the 精簡 mode from the assistant only, and only as a yes or no', async () => {
+    expect(isEmbedNavigateMessage({ ...navigateMessage('overview'), compact: 'yes' })).toBe(false)
+    renderHook(() => useEmbeddedImport())
+    await send({ ...navigateMessage('overview'), compact: true }, 'https://example.com')
+    expect(useEmbedViewStore.getState().compact).toBe(false)
+  })
+
+  it('reports the patient and view it shows to the assistant once it has spoken, and to nobody before', async () => {
+    useEmbedViewStore.setState({ leftTab: 'overview', listedLeftTabs: ['overview', 'meds'] })
+    renderHook(() => useEmbeddedImport())
+    await send(message('r1'), 'https://example.com')
+    expect(parent.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'mediprisma:embed-shown' }), expect.anything())
+    await send(message('r2'), ASSISTANT)
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      { source: 'mediprisma', type: 'mediprisma:embed-shown', version: 1, view: 'overview', patientIds: ['sim-v01'] }, ASSISTANT)
+    await act(async () => {
+      useEmbedViewStore.setState({ leftTab: 'meds' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'mediprisma:embed-shown', view: 'meds' }), ASSISTANT)
   })
 
   it('does nothing when the app is not framed', async () => {
@@ -172,5 +236,16 @@ describe('useEmbeddedImport', () => {
     renderHook(() => useEmbeddedImport())
     await send(message(), ASSISTANT, window)
     expect(importFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('shownView', () => {
+  it('names the panel on screen: a clinical tab, a 醫療摘要 view, or another feature', () => {
+    expect(shownView({ panel: 'left', leftTab: 'reports', rightTab: 'medical-summary', summaryView: 'standard' })).toBe('reports')
+    expect(shownView({ panel: 'right', leftTab: 'reports', rightTab: 'medical-summary', summaryView: 'custom' })).toBe('custom-summary')
+    expect(shownView({ panel: 'right', leftTab: 'reports', rightTab: 'medical-summary', summaryView: 'standard' })).toBe('standard-summary')
+    expect(shownView({ panel: 'right', leftTab: 'reports', rightTab: 'ips-export', summaryView: 'standard' })).toBe('features')
+    expect(shownView({ panel: 'right', leftTab: 'reports', rightTab: 'medication-safety', summaryView: 'standard' })).toBe('safety')
+    expect(shownView({ panel: 'left', leftTab: null, rightTab: 'medical-summary', summaryView: 'standard' })).toBeNull()
   })
 })

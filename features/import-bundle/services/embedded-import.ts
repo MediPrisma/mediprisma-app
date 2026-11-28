@@ -14,9 +14,20 @@
 // same physician if it lets that account in. A guest session lends nothing.
 //
 // The page can also ask which part of this app the frame shows
-// (mediprisma:embed-navigate): the clinical record or the 自訂摘要 view, so a
-// tab on the page opens straight onto it. A view this version does not know is
-// answered as not shown, and the page leaves the frame where it was.
+// (mediprisma:embed-navigate): the clinical record as it was left, one of its
+// tabs (總覽, 上次門診, …), 醫療摘要's 標準摘要／自訂摘要, or 安全 (the hospital
+// drug-interaction check), so a tab on the page opens straight onto it. A view
+// this version does not know, or a tab this patient or this browser does not
+// have (上次門診 without a hospital visit; 安全 off the hospital network or in
+// a build without the check), is answered as not shown, and the page leaves
+// the frame where it was. With `compact: true` the frame leaves out what the
+// page already draws around it: the brand, the patient line and its own tab
+// rows (stores/embed-view.store.ts); `compact: false` brings them back, and a
+// message without it changes nothing.
+//
+// Once a page has spoken to it, the frame tells that page which patient and
+// which view it shows whenever either changes (mediprisma:embed-shown), so
+// the page can check both.
 //
 // Only the exact parent origins below are accepted, only from the frame's own
 // parent window, and the answer goes back to that origin alone. Nothing is sent
@@ -34,6 +45,7 @@ export const EMBED_LEND_SIGN_IN = 'mediprisma:embed-lend-sign-in'
 export const EMBED_LENT_SIGN_IN = 'mediprisma:embed-lent-sign-in'
 export const EMBED_NAVIGATE = 'mediprisma:embed-navigate'
 export const EMBED_NAVIGATED = 'mediprisma:embed-navigated'
+export const EMBED_SHOWN = 'mediprisma:embed-shown'
 
 /** The 門診 AI 助理 on the hospital VM. */
 const PRODUCTION_PARENTS = ['https://opd-ai-agent.mediprisma.tw']
@@ -117,9 +129,16 @@ export function lentSignInReply(requestId: string, idToken: string | null) {
   return { source: EMBED_SOURCE_APP, type: EMBED_LENT_SIGN_IN, version: EMBED_VERSION, requestId, ...(idToken ? { ok: true, idToken } : { ok: false }) }
 }
 
-/** What the page may ask the frame to show: the clinical record, or 醫療摘要's 自訂摘要. */
-export const EMBED_VIEWS = ['record', 'custom-summary'] as const
+/**
+ * What the page may ask the frame to show: the clinical record as it was left
+ * (`record`), one of its tabs by id, 醫療摘要's two views, or 安全.
+ */
+export const EMBED_LEFT_VIEWS = ['overview', 'last-outpatient', 'patient', 'visits', 'reports', 'meds', 'documents'] as const
+export const EMBED_VIEWS = ['record', 'standard-summary', 'custom-summary', 'safety', ...EMBED_LEFT_VIEWS] as const
+/** The right-panel tab `safety` opens. */
+export const EMBED_SAFETY_TAB = 'medication-safety'
 export type EmbedView = typeof EMBED_VIEWS[number]
+export type EmbedLeftView = typeof EMBED_LEFT_VIEWS[number]
 
 export interface EmbedNavigateMessage {
   source: typeof EMBED_SOURCE_PARENT
@@ -128,6 +147,8 @@ export interface EmbedNavigateMessage {
   requestId: string
   /** One of EMBED_VIEWS; a later page may name a view this version does not have. */
   view: string
+  /** The 精簡 mode, when the message says; absent leaves it as it is. */
+  compact?: boolean
 }
 
 export function isEmbedNavigateMessage(data: unknown): data is EmbedNavigateMessage {
@@ -135,10 +156,34 @@ export function isEmbedNavigateMessage(data: unknown): data is EmbedNavigateMess
   return Boolean(message) && message!.source === EMBED_SOURCE_PARENT && message!.type === EMBED_NAVIGATE
     && message!.version === EMBED_VERSION && typeof message!.requestId === 'string' && message!.requestId.length > 0
     && message!.requestId.length <= 100 && typeof message!.view === 'string'
+    && (message!.compact === undefined || typeof message!.compact === 'boolean')
 }
 
 export const isEmbedView = (view: string): view is EmbedView => (EMBED_VIEWS as readonly string[]).includes(view)
+export const isEmbedLeftView = (view: string): view is EmbedLeftView => (EMBED_LEFT_VIEWS as readonly string[]).includes(view)
 
-export function navigatedReply(requestId: string, result: { ok: true; view: EmbedView } | { ok: false; error: string }) {
+export function navigatedReply(
+  requestId: string,
+  result: { ok: true; view: EmbedView; compact: boolean; patientIds: string[] } | { ok: false; error: string },
+) {
   return { source: EMBED_SOURCE_APP, type: EMBED_NAVIGATED, version: EMBED_VERSION, requestId, ...result }
+}
+
+/**
+ * The view the frame shows: on the phone layout the panel on screen, with the
+ * left panel's open tab or the right panel's 醫療摘要 view or 安全; `features`
+ * for any other right-panel tab. On the split layout both panels show, and the panel
+ * last asked for counts.
+ */
+export function shownView(state: { panel: 'left' | 'right'; leftTab: string | null; rightTab: string | null; summaryView: 'standard' | 'custom' }): EmbedLeftView | 'standard-summary' | 'custom-summary' | 'safety' | 'features' | null {
+  if (state.panel === 'right') {
+    if (state.rightTab === EMBED_SAFETY_TAB) return 'safety'
+    if (state.rightTab !== 'medical-summary') return 'features'
+    return state.summaryView === 'custom' ? 'custom-summary' : 'standard-summary'
+  }
+  return state.leftTab && isEmbedLeftView(state.leftTab) ? state.leftTab : null
+}
+
+export function shownMessage(view: ReturnType<typeof shownView>, patientIds: string[]) {
+  return { source: EMBED_SOURCE_APP, type: EMBED_SHOWN, version: EMBED_VERSION, view, patientIds }
 }
