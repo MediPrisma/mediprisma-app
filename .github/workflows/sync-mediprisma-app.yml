@@ -212,6 +212,10 @@ jobs:
         env:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
           NEXT_PUBLIC_INTRANET_AI_ORIGIN: https://ai-vghtpe.mediprisma.tw
+          # 交互作用 (安全 tab) on /app too, by owner decision 2026-11-28, as on
+          # /app-staging and /app-hmc. The tab appears only where the browser
+          # reaches the hospital service, so it stays hidden off the hospital network.
+          NEXT_PUBLIC_DDI_SERVICE_ORIGIN: https://whisper.vghtpe.gov.tw:18427
           # Public origin only (no secrets); baked into /app, not a runtime switch.
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}
           NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}
