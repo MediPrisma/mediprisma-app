@@ -26,9 +26,12 @@ interface EmbedViewState {
   rightTab: string | null
   listedRightTabs: readonly string[]
   setRightTabs: (rightTab: string, listed: readonly string[]) => void
-  /** The phone layout's visible panel, written by the page. */
+  /** The phone layout's visible panel, and whether a record detail (a visit,
+   *  a trend) is drawn over the right panel; written by the page. */
   panel: 'left' | 'right'
   setPanel: (panel: 'left' | 'right') => void
+  detailOpen: boolean
+  setDetailOpen: (detailOpen: boolean) => void
 }
 
 export const useEmbedViewStore = create<EmbedViewState>((set) => ({
@@ -52,4 +55,6 @@ export const useEmbedViewStore = create<EmbedViewState>((set) => ({
   )),
   panel: 'left',
   setPanel: (panel) => set({ panel }),
+  detailOpen: false,
+  setDetailOpen: (detailOpen) => set({ detailOpen }),
 }))

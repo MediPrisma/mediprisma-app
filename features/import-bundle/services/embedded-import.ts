@@ -173,10 +173,11 @@ export function navigatedReply(
  * The view the frame shows: on the phone layout the panel on screen, with the
  * left panel's open tab or the right panel's 醫療摘要 view or 安全; `features`
  * for any other right-panel tab. On the split layout both panels show, and the panel
- * last asked for counts.
+ * last asked for counts. A record detail drawn over the right panel belongs to
+ * the clinical tab it was opened from, so that tab is what shows.
  */
-export function shownView(state: { panel: 'left' | 'right'; leftTab: string | null; rightTab: string | null; summaryView: 'standard' | 'custom' }): EmbedLeftView | 'standard-summary' | 'custom-summary' | 'safety' | 'features' | null {
-  if (state.panel === 'right') {
+export function shownView(state: { panel: 'left' | 'right'; leftTab: string | null; rightTab: string | null; summaryView: 'standard' | 'custom'; detailOpen?: boolean }): EmbedLeftView | 'standard-summary' | 'custom-summary' | 'safety' | 'features' | null {
+  if (state.panel === 'right' && !state.detailOpen) {
     if (state.rightTab === EMBED_SAFETY_TAB) return 'safety'
     if (state.rightTab !== 'medical-summary') return 'features'
     return state.summaryView === 'custom' ? 'custom-summary' : 'standard-summary'

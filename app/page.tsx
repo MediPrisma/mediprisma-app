@@ -239,6 +239,7 @@ function PageContent() {
   // 臨床摘要／功能 switch. It is told which panel is on screen.
   const embedCompact = useEmbedViewStore((state) => state.compact)
   const setEmbedPanel = useEmbedViewStore((state) => state.setPanel)
+  const setEmbedDetailOpen = useEmbedViewStore((state) => state.setDetailOpen)
   useEffect(() => { setEmbedPanel(mobileView) }, [mobileView, setEmbedPanel])
 
   // Header collapse: tuck the title/toolbar away into a slim strip so the
@@ -275,6 +276,7 @@ function PageContent() {
   const deferredDetailClearFrameRef = useRef<number | null>(null)
   const deferredDetailClearTimerRef = useRef<number | null>(null)
   const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
+  useEffect(() => { setEmbedDetailOpen(detailVisible) }, [detailVisible, setEmbedDetailOpen])
 
   // A record detail (a trend, a visit) is drawn over the 功能 panel. When a
   // right-panel task is asked for (revealTab), it is underneath that detail,

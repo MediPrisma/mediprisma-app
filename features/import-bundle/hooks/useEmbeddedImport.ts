@@ -75,7 +75,6 @@ export function useEmbeddedImport() {
           return
         }
         const embed = useEmbedViewStore.getState()
-        if (data.compact !== undefined) embed.setCompact(data.compact)
         // A tab this patient does not have (上次門診 without a hospital visit).
         // Before the record panel is drawn nothing is listed yet; the panel
         // opens the asked tab when it mounts, if it has it.
@@ -87,6 +86,9 @@ export function useEmbeddedImport() {
           window.parent.postMessage(navigatedReply(data.requestId, { ok: false, error: `這位病人沒有「${view}」這個畫面` }), event.origin)
           return
         }
+        // Only a request that is carried out changes the mode: one answered as
+        // not shown leaves the frame exactly as it was.
+        if (data.compact !== undefined) embed.setCompact(data.compact)
         if (view === 'safety') {
           importRef.current.revealTab(EMBED_SAFETY_TAB)
         } else if (view === 'custom-summary' || view === 'standard-summary') {
@@ -128,9 +130,10 @@ export function useEmbeddedImport() {
 function useReportShown(parentOrigin: string | null, summaryView: 'standard' | 'custom', loadedPatientIds: () => Promise<string[]>) {
   const panel = useEmbedViewStore((state) => state.panel)
   const rightTab = useEmbedViewStore((state) => state.rightTab)
+  const detailOpen = useEmbedViewStore((state) => state.detailOpen)
   const leftTab = useEmbedViewStore((state) => state.leftTab)
   const { patient } = usePatient()
-  const view = shownView({ panel, leftTab, rightTab, summaryView })
+  const view = shownView({ panel, leftTab, rightTab, summaryView, detailOpen })
   const patientKey = patient?.id ?? null
   useEffect(() => {
     if (!parentOrigin || typeof window === 'undefined' || window.parent === window) return

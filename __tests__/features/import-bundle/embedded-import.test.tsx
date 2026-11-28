@@ -69,7 +69,7 @@ describe('useEmbeddedImport', () => {
     revealRecord.mockReset()
     load.mockReset().mockResolvedValue(['sim-v01'])
     parent.postMessage.mockReset()
-    useEmbedViewStore.setState({ compact: false, leftRequest: null, leftTab: null, listedLeftTabs: [], rightTab: null, listedRightTabs: [], panel: 'left' })
+    useEmbedViewStore.setState({ compact: false, leftRequest: null, leftTab: null, listedLeftTabs: [], rightTab: null, listedRightTabs: [], panel: 'left', detailOpen: false })
     Object.defineProperty(window, 'parent', { configurable: true, value: parent })
   })
   afterEach(() => Object.defineProperty(window, 'parent', original))
@@ -209,6 +209,15 @@ describe('useEmbeddedImport', () => {
     expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n8', ok: false }), ASSISTANT)
   })
 
+  it('leaves the mode as it was when the view asked for is not shown', async () => {
+    useEmbedViewStore.setState({ listedLeftTabs: ['overview', 'patient'] })
+    renderHook(() => useEmbeddedImport())
+    await send({ ...navigateMessage('last-outpatient', 'n11'), compact: true }, ASSISTANT)
+    await send({ ...navigateMessage('safety', 'n12'), compact: true }, ASSISTANT)
+    expect(useEmbedViewStore.getState().compact).toBe(false)
+    expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n12', ok: false }), ASSISTANT)
+  })
+
   it('takes the 精簡 mode from the assistant only, and only as a yes or no', async () => {
     expect(isEmbedNavigateMessage({ ...navigateMessage('overview'), compact: 'yes' })).toBe(false)
     renderHook(() => useEmbeddedImport())
@@ -246,6 +255,8 @@ describe('shownView', () => {
     expect(shownView({ panel: 'right', leftTab: 'reports', rightTab: 'medical-summary', summaryView: 'standard' })).toBe('standard-summary')
     expect(shownView({ panel: 'right', leftTab: 'reports', rightTab: 'ips-export', summaryView: 'standard' })).toBe('features')
     expect(shownView({ panel: 'right', leftTab: 'reports', rightTab: 'medication-safety', summaryView: 'standard' })).toBe('safety')
+    // A visit or trend detail drawn over the right panel is read as its clinical tab.
+    expect(shownView({ panel: 'right', leftTab: 'visits', rightTab: 'medical-summary', summaryView: 'standard', detailOpen: true })).toBe('visits')
     expect(shownView({ panel: 'left', leftTab: null, rightTab: 'medical-summary', summaryView: 'standard' })).toBeNull()
   })
 })
