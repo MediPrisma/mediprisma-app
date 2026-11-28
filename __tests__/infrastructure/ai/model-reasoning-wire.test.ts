@@ -112,13 +112,28 @@ describe('Luna and Haiku reasoning defaults on the wire', () => {
     }
   })
 
-  it.each([true, false])('sends Haiku adaptive low with room for thinking (proxy=%s)', async useProxy => {
+  it.each([true, false])('sends Haiku low with thinking explicitly disabled (proxy=%s)', async useProxy => {
     for (const streaming of [false, true]) {
       expect(await sentBody('claude-haiku-5-5', useProxy, streaming)).toMatchObject({
-        model: 'claude-haiku-5-5', thinking: { type: 'adaptive' },
-        output_config: { effort: 'low' }, max_tokens: 32_768,
+        model: 'claude-haiku-5-5', thinking: { type: 'disabled' },
+        output_config: { effort: 'low' }, max_tokens: 8_192,
       })
     }
+  })
+
+  it.each([null, 'test-key'])('lets one Haiku stream think when the caller asks (apiKey=%s)', async apiKey => {
+    const fetch = global.fetch as jest.Mock
+    fetch.mockReset()
+    fetch.mockResolvedValueOnce(new Response('{}', { status: 500 }))
+    await expect(new AiSdkStreamAdapter(new AiProviderFactory()).stream({
+      model: 'claude-haiku-5-5', apiKey,
+      messages: [{ role: 'user', content: 'Synthetic only.' }],
+      signal: new AbortController().signal, onChunk: () => {},
+      claudeThinkingEffort: 'medium', maxTokens: 16_000,
+    })).rejects.toThrow()
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({
+      thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, max_tokens: 16_000,
+    })
   })
 
   it('keeps explicit Luna effort and output limits', async () => {

@@ -43,6 +43,11 @@ import {
 import { buildOverviewSnapshot } from '@/src/core/use-cases/medical-summary/overview-snapshot'
 import { buildReportDigest, sentReportKeys } from '@/src/core/use-cases/medical-summary/report-digest'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
+import {
+  haikuSummaryLaneOptions,
+  usesHaikuSummaryLanes,
+  withHaikuSummaryLanePolicy,
+} from '@/src/core/use-cases/medical-summary/haiku-summary-policy'
 import type {
   MedicalSummaryCardErrors,
   MedicalSummaryCardId,
@@ -456,6 +461,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
      */
     const streamModelRequest = (request: {
       laneId: SummaryDiagnosticContext['lane']
+      /** The cards this one request asks for. */
+      cardIds: readonly MedicalSummaryCardId[]
       inspect: SummaryDiagnosticContext['inspect']
       clinicalContext: string
       buildMessages: (fittedClinicalContext: string) => AiMessage[]
@@ -473,7 +480,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       modelName: ctx.modelName,
       locale: ctx.locale,
       buildRequest: (fittedClinicalContext) => {
-        const messages = request.buildMessages(fittedClinicalContext)
+        const messages = withHaikuSummaryLanePolicy(
+          request.buildMessages(fittedClinicalContext), ctx.modelId, request.cardIds,
+        )
         if (ctx.modelId === 'gpt-6-luna' && request.laneId === 'full') {
           messages.push({
             role: 'user',
@@ -510,6 +519,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
                 ? { reasoningEffort: 'low' as const, textVerbosity: 'high' as const }
                 : {}),
             ...(request.hiddenReasoning ? { hiddenReasoning: request.hiddenReasoning } : {}),
+            ...haikuSummaryLaneOptions(ctx.modelId, request.cardIds),
             onChunk: streamChunk,
           })
         },
@@ -596,6 +606,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       ) => {
         const outcome = await streamModelRequest({
           laneId,
+          cardIds: cards.map((card) => card.id),
           inspect: (text) => inspectSummaryBlocks(text, cards.map(card => ({
             complete: value => card.hasCompleteBatchBlock(value),
             parse: value => parseLaneBatch(card, value),
@@ -808,6 +819,14 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               hiddenReasoning: 'off',
             },
           ]
+        : usesHaikuSummaryLanes(ctx.modelId)
+          // One request per card (see haiku-summary-policy). The lane names are
+          // the Collector's existing ones.
+          ? narrativeCards.map((card) => ({
+              id: card.id === 'overview' ? 'fast' as const : card.id === 'problems' ? 'full' as const : 'batch' as const,
+              cards: [card],
+              input: promptInput,
+            }))
         : ctx.modelId === 'gpt-6-luna' && narrativeCards.some((card) => card.id === 'problems') && narrativeCards.length > 1
           ? [
               // Keep the complete evidence for the problem list, but let this
@@ -855,6 +874,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         let completePoints = 0
         const { value, clinicalContext: sentReportsText } = await streamModelRequest({
           laneId: 'reports',
+          cardIds: [card.id],
           inspect: (text) => card.hasCompleteBatchBlock(text)
             ? card.parseBatch(text, ctx.catalog) ? 'valid' : 'invalid' : 'incomplete',
           clinicalContext: digest.promptText,
