@@ -137,6 +137,71 @@ export const HEME: CalculatorDef[] = [
       reference: 'Ganzoni AM. Schweiz Med Wochenschr 1970;100:301–3. Iron deficit (mg) = weight (kg) × (target Hb − actual Hb) (g/dL) × 2.4 + iron stores (mg).',
     },
 
+  // ── i.v. iron: total need and dose caps from the product label ───────────
+    {
+      id: 'iv-iron-label-dose',
+      name: { en: 'IV Iron Dose (Label Table)', zh: '靜脈鐵劑仿單劑量' },
+      category: 'heme',
+      audience: 'medical',
+      blurb: { en: 'Total iron need and per-dose maximum from the label’s simplified table.', zh: '依仿單簡化表查總鐵需求量與單次上限。' },
+      inputs: [
+        {
+          key: 'product', type: 'select', label: { en: 'Product', zh: '製劑' }, defaultValue: 'fcm',
+          options: [
+            { value: 'fcm', label: { en: 'Ferric carboxymaltose (Ferinject)', zh: 'Ferric carboxymaltose（Ferinject）' } },
+            { value: 'fdi', label: { en: 'Ferric derisomaltose (Monofer)', zh: 'Ferric derisomaltose（Monofer）' } },
+          ],
+        },
+        { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
+        { key: 'hb', type: 'number', label: { en: 'Hemoglobin', zh: '血色素' }, unit: 'g/dL', dimension: 'hemoglobin', normalRange: { low: 12, high: 16 }, source: { kind: 'lab', keys: ['HB'] } },
+      ],
+      compute: (v) => {
+        const weight = n(v, 'weight'); const hb = n(v, 'hb'); const product = v.product
+        if (weight === undefined || hb === undefined || weight <= 0 || hb <= 0) return null
+        const mg = (value: number) => `${Math.round(value)} mg`
+        if (product === 'fcm') {
+          // Ferinject SmPC 4.2, Table 1: columns <35 kg, 35 to <70 kg, ≥70 kg; rows Hb <10, 10 to <14, ≥14 g/dL.
+          const row = hb < 10 ? 0 : hb < 14 ? 1 : 2
+          const total = weight < 35
+            ? weight * [30, 15, 15][row]!
+            : weight < 70 ? [1500, 1000, 500][row]! : [2000, 1500, 500][row]!
+          return {
+            numericValue: total, value: String(Math.round(total)), unit: 'mg',
+            interpretation: { en: 'Total iron need (Ferinject)', zh: '總鐵需求量（Ferinject）' },
+            extra: [
+              { label: { en: 'Max single dose, infusion (20 mg/kg, ≤ 1000 mg)', zh: '單次上限，輸注（20 mg/kg，≤ 1000 mg）' }, value: mg(Math.min(weight * 20, 1000)) },
+              { label: { en: 'Max single dose, injection (15 mg/kg, ≤ 1000 mg)', zh: '單次上限，推注（15 mg/kg，≤ 1000 mg）' }, value: mg(Math.min(weight * 15, 1000)) },
+              { label: { en: 'Max per week', zh: '每週上限' }, value: '1000 mg' },
+            ],
+            notes: {
+              en: 'UK/EU label, age ≥ 14. A further dose at least 7 days after the first. Haemodialysis: no more than 200 mg in a day. Check the label of the product you stock.',
+              zh: '依英國／歐盟仿單，適用 ≥ 14 歲。總量超過單次上限時，下一劑至少間隔 7 天。血液透析者單日不超過 200 mg。請核對院內品項仿單。',
+            },
+          }
+        }
+        if (product === 'fdi') {
+          // Monofer SmPC 4.2, Table 1: columns <50 kg, 50 to <70 kg, ≥70 kg; rows Hb ≥10, <10 g/dL.
+          const column = weight < 50 ? 0 : weight < 70 ? 1 : 2
+          const total = (hb < 10 ? [500, 1500, 2000] : [500, 1000, 1500])[column]!
+          return {
+            numericValue: total, value: String(total), unit: 'mg',
+            interpretation: { en: 'Total iron need (Monofer)', zh: '總鐵需求量（Monofer）' },
+            extra: [
+              { label: { en: 'Max single infusion (20 mg/kg)', zh: '單次輸注上限（20 mg/kg）' }, value: mg(weight * 20) },
+              { label: { en: 'Max single bolus', zh: '單次推注上限' }, value: '500 mg' },
+              { label: { en: 'Max per week (20 mg/kg)', zh: '每週上限（20 mg/kg）' }, value: mg(weight * 20) },
+            ],
+            notes: {
+              en: 'UK/EU label, adults. Check the label of the product you stock.',
+              zh: '依英國／歐盟仿單，適用成人。請核對院內品項仿單。',
+            },
+          }
+        }
+        return null
+      },
+      reference: 'Ferinject 50 mg iron/mL SmPC (UK, emc), section 4.2, Table 1; text revised 22 May 2025. Monofer 100 mg/mL SmPC (UK, emc), section 4.2, Table 1; text revised 28 March 2025.',
+    },
+
   // ── Mentzer index ────────────────────────────────────────────────────────
     {
       id: 'mentzer-index',

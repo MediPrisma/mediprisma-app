@@ -972,6 +972,37 @@ describe('Iron deficit (Ganzoni)', () => {
   })
 })
 
+describe('IV iron label dose', () => {
+  const dose = (product: string, weight: number, hb: number) => run('iv-iron-label-dose', { product, weight: String(weight), hb: String(hb) })!
+  // Every cell of the Ferinject SmPC 4.2 Table 1, band edges included.
+  it.each([
+    [30, 9.9, '900'], [30, 10, '450'], [30, 14, '450'],
+    [35, 9.9, '1500'], [35, 10, '1000'], [69.9, 13.9, '1000'], [35, 14, '500'],
+    [70, 9.9, '2000'], [70, 10, '1500'], [70, 13.9, '1500'], [70, 14, '500'],
+  ])('Ferinject %s kg, Hb %s → %s mg', (weight, hb, total) => {
+    expect(dose('fcm', weight, hb).value).toBe(total)
+  })
+  // Every cell of the Monofer SmPC 4.2 Table 1.
+  it.each([
+    [49.9, 9.9, '500'], [49.9, 10, '500'],
+    [50, 9.9, '1500'], [50, 10, '1000'], [69.9, 10, '1000'],
+    [70, 9.9, '2000'], [70, 10, '1500'],
+  ])('Monofer %s kg, Hb %s → %s mg', (weight, hb, total) => {
+    expect(dose('fdi', weight, hb).value).toBe(total)
+  })
+  it('caps a single Ferinject dose at 20 mg/kg by infusion, 15 mg/kg by injection, and 1000 mg', () => {
+    expect(dose('fcm', 40, 8).extra!.map((e) => e.value)).toEqual(['800 mg', '600 mg', '1000 mg'])
+    expect(dose('fcm', 80, 8).extra!.map((e) => e.value)).toEqual(['1000 mg', '1000 mg', '1000 mg'])
+  })
+  it('caps a single Monofer infusion and a week at 20 mg/kg, a bolus at 500 mg', () => {
+    expect(dose('fdi', 60, 8).extra!.map((e) => e.value)).toEqual(['1200 mg', '500 mg', '1200 mg'])
+  })
+  it('gives no result while weight or hemoglobin is missing', () => {
+    expect(run('iv-iron-label-dose', { product: 'fcm', weight: '', hb: '8' })).toBeNull()
+    expect(run('iv-iron-label-dose', { product: 'fdi', weight: '70', hb: '' })).toBeNull()
+  })
+})
+
 describe('Mentzer index', () => {
   it('MCV 65 / RBC 6.0 → 10.8, thalassemia trait more likely', () => {
     const r = run('mentzer-index', { mcv: '65', rbc: '6.0' })

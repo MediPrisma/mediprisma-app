@@ -260,6 +260,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Estimating the total i.v. iron dose for iron-deficiency anemia.', zh: '估算缺鐵性貧血靜脈鐵劑的總補充量。' },
     caveats: { en: 'Target Hb 15 g/dL and stores 500 mg are the usual adult values; under 35 kg use a target of 13 g/dL and stores of 15 mg/kg. Not for ongoing blood loss. Dose per infusion and its maximum follow the product label, which may give its own simplified table.', zh: '目標 Hb 15 g/dL、儲存鐵 500 mg 為成人常用值；體重 < 35 kg 改用目標 13 g/dL、儲存鐵 15 mg/kg。持續失血者不適用。單次劑量與上限依各製劑仿單（部分仿單另有簡化劑量表）。' },
   },
+  'iv-iron-label-dose': {
+    useWhen: { en: 'Choosing the total dose of ferric carboxymaltose or ferric derisomaltose for confirmed iron deficiency.', zh: '已確認缺鐵，決定 ferric carboxymaltose 或 ferric derisomaltose 的總劑量。' },
+    caveats: { en: 'From the UK/EU labels; the label of the product you stock may differ. Iron sucrose has no such table: use the Ganzoni estimate. Reassess hemoglobin no earlier than 4 weeks after the last dose.', zh: '依英國／歐盟仿單，院內品項仿單可能不同。Iron sucrose 無簡化表，請用 Ganzoni 估算。最後一劑後至少 4 週再複查血色素。' },
+  },
   'mentzer-index': {
     useWhen: { en: 'A first look at microcytic anemia: iron deficiency versus thalassemia trait.', zh: '小球性貧血的初步鑑別：缺鐵性貧血或地中海型貧血帶因。' },
     caveats: { en: 'A screening index only: it misclassifies combined iron deficiency and thalassemia, and anemia of chronic disease. Confirm with iron studies and hemoglobin analysis.', zh: '僅為篩檢指標：缺鐵合併地中海型貧血、慢性病貧血時會誤判。需以鐵相關檢驗與血紅素分析確認。' },
