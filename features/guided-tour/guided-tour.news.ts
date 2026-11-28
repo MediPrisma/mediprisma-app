@@ -11,12 +11,12 @@ export const WHATS_NEW: WhatsNewItem[] = [
   {
     id: '2026-10-tour-hub',
     title: { 'zh-TW': '導覽改版：按任務挑著學', en: 'Tours, now by task' },
-    where: { 'zh-TW': '頁首「導覽」', en: 'Tours in the header' },
+    where: { 'zh-TW': '右上角選單的「導覽中心」', en: 'Tours in the top-right menu' },
     body: {
       'zh-TW': '導覽改成 1 分鐘的任務小段落，看過的會打勾，新功能也會在這裡提示。',
       en: 'Tours are now one-minute tasks with a tick when viewed, and new features are announced here.',
     },
-    anchor: '[data-tour="tour-hub-button"]',
+    anchor: '[data-tour="header-more"]',
     opensHub: true,
   },
   {

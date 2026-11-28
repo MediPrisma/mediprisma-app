@@ -194,8 +194,8 @@ const ALL_STEPS: TourStep[] = [
     target: '[data-tour="medical-summary-custom-tab"]',
     title: { 'zh-TW': '完成！需要時可從章節重新開始', en: 'Done—revisit any chapter when you need it' },
     body: {
-      'zh-TW': '你已認識自訂摘要的編輯、啟用、分享與範本庫。之後可從頁首「導覽」，或自訂摘要的「使用教學」重新查看。結束會還原原本畫面；導覽沒有修改模板、發布內容或呼叫 AI。',
-      en: 'You have explored editing, activation, sharing, and the library. Reopen this guide from Tours in the header or User guide in Custom. Finishing restores your previous view; no templates were changed, published, or generated.',
+      'zh-TW': '你已認識自訂摘要的編輯、啟用、分享與範本庫。之後可從右上角選單的「導覽中心」，或自訂摘要的「使用教學」重新查看。結束會還原原本畫面；導覽沒有修改模板、發布內容或呼叫 AI。',
+      en: 'You have explored editing, activation, sharing, and the library. Reopen this guide from Tours in the top-right menu or User guide in Custom. Finishing restores your previous view; no templates were changed, published, or generated.',
     },
   },
 ]

@@ -1,7 +1,7 @@
 "use client"
 
 import { SDK_IMPORT_AVAILABLE } from '@/src/shared/config/optional-capabilities'
-import { useRef, useState } from "react"
+import { forwardRef, useImperativeHandle, useRef, useState } from "react"
 import { FileUp, Trash2, Database, FlaskConical, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,19 +20,25 @@ import { BundleFileInput, type BundleFileInputHandle } from "./components/Bundle
 
 interface ImportBundleButtonProps {
   /**
-   * When true, hide the text label on mobile (<768px) — only the
-   * file-import icon shows. Used in the header where space is tight and
-   * the button sits among other already-iconified controls.
-   *
-   * When false (default), the label is always visible — used in the
-   * welcome onboarding screen where this is the primary CTA and
-   * "匯入資料" needs to be unambiguous.
+   * The header shows only the data-source badge (and its clear control):
+   * 匯入資料 is an entry of the header menu there, which opens the file
+   * picker through this component's `open()` handle. The welcome screen and
+   * dev previews keep the labelled button.
    */
-  iconOnlyOnMobile?: boolean
+  badgesOnly?: boolean
 }
 
-export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleButtonProps = {}) {
+export interface ImportBundleButtonHandle {
+  /** Opens the file picker; call it from a click so the browser allows it. */
+  open(): void
+}
+
+export const ImportBundleButton = forwardRef<ImportBundleButtonHandle, ImportBundleButtonProps>(function ImportBundleButton(
+  { badgesOnly = false },
+  ref,
+) {
   const fileRef = useRef<BundleFileInputHandle>(null)
+  useImperativeHandle(ref, () => ({ open: () => fileRef.current?.open() }), [])
   const { t, locale } = useLanguage()
   const i18n = t.importBundle
   const { importFile, clear, loading, error, hasBundle, bundleIsActive, isDemo } = useImportBundle()
@@ -90,26 +96,20 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className={`h-9 gap-1.5 text-xs shadow-none hover:shadow-none sm:text-sm max-md:h-[44px] ${
-            iconOnlyOnMobile ? 'w-auto px-3 max-md:w-[44px] max-md:px-0 @max-[72rem]:w-9 @max-[72rem]:px-0' : 'px-3'
-          }`}
-          onClick={() => fileRef.current?.open()}
-          disabled={loading}
-          title={SDK_IMPORT_AVAILABLE ? i18n.importTitle : (locale === 'en' ? 'Import a FHIR Bundle' : '匯入 FHIR Bundle')}
-          aria-label={i18n.button}
-        >
-          <FileUp className="h-3.5 w-3.5" />
-          {/* In iconOnlyOnMobile mode the label hides below sm: — the
-              header uses this. Without the flag the label always shows,
-              which the welcome-screen CTA needs because it's the main
-              call-to-action and shouldn't be ambiguous. */}
-          <span className={iconOnlyOnMobile ? 'max-md:hidden @max-[72rem]:hidden' : ''}>
-            {loading ? i18n.importing : i18n.button}
-          </span>
-        </Button>
+        {!badgesOnly && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5 px-3 text-xs shadow-none hover:shadow-none sm:text-sm max-md:h-[44px]"
+            onClick={() => fileRef.current?.open()}
+            disabled={loading}
+            title={SDK_IMPORT_AVAILABLE ? i18n.importTitle : (locale === 'en' ? 'Import a FHIR Bundle' : '匯入 FHIR Bundle')}
+            aria-label={i18n.button}
+          >
+            <FileUp className="h-3.5 w-3.5" />
+            <span>{loading ? i18n.importing : i18n.button}</span>
+          </Button>
+        )}
         <AlertDialog open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -138,4 +138,4 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
       />
     </div>
   )
-}
+})

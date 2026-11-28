@@ -1,12 +1,16 @@
-// Header Authentication Button Component
+// The header's one menu: account state and usage on top, the less-used
+// header controls (passed in as `menuItems`) below. The trigger shows only
+// who is using the app — a spinner while the session restores, 訪客 for a
+// free-tier visitor, otherwise an icon. It never reads 登入: it opens a menu,
+// and 登入 is that menu's first entry.
 'use client'
 
-import { useState, useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { AuthDialog } from './AuthDialog'
-import { LogIn, User, Info, Gift, Loader2 } from 'lucide-react'
+import { ChevronDown, LogIn, LogOut, User, Info, Gift, Loader2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +46,12 @@ function MiniUsageRow({ label, used, limit }: { label: string; used: number; lim
   )
 }
 
-export function HeaderAuthButton() {
+export interface HeaderAuthButtonProps {
+  /** Menu entries below the account section (import, tours, audience …). */
+  menuItems?: ReactNode
+}
+
+export function HeaderAuthButton({ menuItems }: HeaderAuthButtonProps = {}) {
   const { t } = useLanguage()
   const {
     user,
@@ -63,139 +72,106 @@ export function HeaderAuthButton() {
     getServerSnapshot,
   )
 
-  if (!hydrated || loading) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        disabled
-        className="h-9 w-auto gap-2 px-3 shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
-        aria-label={t.auth.restoringSession}
-        title={t.auth.restoringSession}
-      >
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        <span className="max-md:hidden @max-[72rem]:hidden">
-          {t.auth.restoringSession}
-        </span>
-      </Button>
-    )
-  }
-
-  // Anonymous (free-tier) visitor — `user` is null by design. Surface their
-  // free usage and a CTA to sign in for the larger quota.
-  if (!user && isAnonymous) {
-    return (
-      <>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
-              aria-label={t.auth.guest}
-              title={t.auth.guest}
-            >
-              <Gift className="h-4 w-4" />
-              <span className="max-md:hidden @max-[72rem]:hidden">{t.auth.guest}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <p className="text-sm font-medium">{t.auth.guestFreeTier}</p>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-2">
-                <span className="text-xs text-muted-foreground">{t.auth.usageToday}</span>
-                <MiniUsageRow label={t.auth.usageChat} used={dailyUsage} limit={dailyLimit} />
-                <MiniUsageRow label={t.auth.usagePerplexity} used={perplexityUsage} limit={perplexityLimit} />
-                <MiniUsageRow label={t.auth.usageWhisper} used={whisperUsage} limit={whisperLimit} />
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setShowAuthDialog(true)}>
-              <LogIn className="mr-2 h-4 w-4" />
-              {t.auth.signInForMore}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
-      </>
-    )
-  }
-
-  if (!user) {
-    return (
-      <>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShowAuthDialog(true)}
-          className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
-          aria-label={t.auth.signIn}
-          title={t.auth.signIn}
-        >
-          <LogIn className="h-4 w-4" />
-          <span className="max-md:hidden @max-[72rem]:hidden">{t.auth.signIn}</span>
-        </Button>
-        <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
-      </>
-    )
-  }
+  const restoring = !hydrated || loading
+  // Anonymous (free-tier) visitor — `user` is null by design.
+  const guest = !restoring && !user && isAnonymous
+  const signedIn = !restoring && !!user
+  const accountName = user?.displayName || user?.email?.split('@')[0] || t.auth.signedInAs
+  const label = restoring
+    ? t.auth.restoringSession
+    : signedIn ? accountName : guest ? t.auth.guest : t.auth.signIn
+  const Icon = restoring ? Loader2 : signedIn ? User : guest ? Gift : LogIn
+  const usage = (
+    <>
+      <MiniUsageRow label={t.auth.usageChat} used={dailyUsage} limit={dailyLimit} />
+      <MiniUsageRow label={t.auth.usagePerplexity} used={perplexityUsage} limit={perplexityLimit} />
+      <MiniUsageRow label={t.auth.usageWhisper} used={whisperUsage} limit={whisperLimit} />
+    </>
+  )
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
-          aria-label={user.displayName || user.email?.split('@')[0] || t.auth.signedInAs}
-          title={user.displayName || user.email?.split('@')[0] || t.auth.signedInAs}
-        >
-          <User className="h-4 w-4" />
-          <span className="max-w-32 truncate max-md:hidden @max-[72rem]:hidden">{user.displayName || user.email?.split('@')[0]}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium">{user.displayName || t.auth.signedInAs}</p>
-            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-xs text-muted-foreground flex items-center gap-1 cursor-help w-fit">
-                  {t.auth.usageToday}
-                  <Info className="h-3 w-3" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t.auth.usageTodayTooltip}
-              </TooltipContent>
-            </Tooltip>
-            <MiniUsageRow label={t.auth.usageChat} used={dailyUsage} limit={dailyLimit} />
-            <MiniUsageRow
-              label={t.auth.usagePerplexity}
-              used={perplexityUsage}
-              limit={perplexityLimit}
-            />
-            <MiniUsageRow
-              label={t.auth.usageWhisper}
-              used={whisperUsage}
-              limit={whisperLimit}
-            />
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut}>
-          {t.auth.signOut}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            data-tour="header-more"
+            className="h-9 w-auto gap-1.5 px-2.5 shadow-none hover:shadow-none max-md:h-[44px] max-md:min-w-[44px]"
+            aria-label={label}
+            title={label}
+          >
+            <Icon className={`h-4 w-4 ${restoring ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {guest && <span className="max-md:hidden @max-[72rem]:hidden">{label}</span>}
+            <ChevronDown className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          {signedIn && (
+            <>
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium">{user?.displayName || t.auth.signedInAs}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 cursor-help w-fit">
+                        {t.auth.usageToday}
+                        <Info className="h-3 w-3" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {t.auth.usageTodayTooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                  {usage}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {guest && (
+            <>
+              <DropdownMenuLabel>
+                <p className="text-sm font-medium">{t.auth.guestFreeTier}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-2">
+                  <span className="text-xs text-muted-foreground">{t.auth.usageToday}</span>
+                  {usage}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {!restoring && !signedIn && (
+            <>
+              <DropdownMenuItem className="min-h-[36px] gap-2 max-md:min-h-[44px]" onSelect={() => setShowAuthDialog(true)}>
+                <LogIn className="h-4 w-4" />
+                {guest ? t.auth.signInForMore : t.auth.signIn}
+              </DropdownMenuItem>
+              {menuItems && <DropdownMenuSeparator />}
+            </>
+          )}
+          {menuItems}
+          {signedIn && (
+            <>
+              {menuItems && <DropdownMenuSeparator />}
+              <DropdownMenuItem className="min-h-[36px] gap-2 max-md:min-h-[44px]" onSelect={signOut}>
+                <LogOut className="h-4 w-4" />
+                {t.auth.signOut}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
+    </>
   )
 }

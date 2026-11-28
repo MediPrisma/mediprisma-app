@@ -11,7 +11,6 @@ jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => (
 jest.mock('@/src/application/hooks/use-beta-features.hook', () => ({ useBetaFeatures: () => ({ enabled: false }) }))
 
 import { TourHub } from '@/features/guided-tour/TourHub'
-import { TourHubButton } from '@/features/guided-tour/TourHubButton'
 import { useGuidedTourStore } from '@/features/guided-tour/guided-tour.store'
 import { readTourProgress } from '@/features/guided-tour/guided-tour.progress'
 import { RightFeatureTour } from '@/features/right-feature-tour/RightFeatureTour'
@@ -38,10 +37,12 @@ beforeEach(() => {
 
 describe('tour hub focus', () => {
   function openFromHeader() {
-    render(<><TourHubButton /><TourHub /></>)
-    const entry = screen.getByRole('button', { name: '導覽中心' })
+    // The hub opens from the header menu's 導覽中心 item; the menu's trigger
+    // is the entry focus returns to.
+    render(<><button type="button" data-tour="header-more">選單</button><TourHub /></>)
+    const entry = screen.getByRole('button', { name: '選單' })
     entry.focus()
-    fireEvent.click(entry)
+    act(() => useGuidedTourStore.getState().openHub())
     expect(screen.getByTestId('tour-hub')).toBeTruthy()
     return entry
   }
