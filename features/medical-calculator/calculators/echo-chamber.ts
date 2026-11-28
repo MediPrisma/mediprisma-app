@@ -9,8 +9,8 @@ const echo = (key: EchoKey, en: string, zh: string, unit = ''): NumberInput => (
   key, type: 'number', label: label(en, zh), unit, source: { kind: 'echo', key }, optional: true,
 })
 
-const GRADE: Record<EchoGrade | 'needsSex', L> = {
-  normal: label('Normal', '正常'),
+// A normal row shows its name alone, so normal needs no word.
+const GRADE: Record<Exclude<EchoGrade, 'normal'> | 'needsSex', L> = {
   abnormal: label('Abnormal', '異常'),
   mild: label('Mildly abnormal', '輕度異常'),
   moderate: label('Moderately abnormal', '中度異常'),
@@ -20,12 +20,11 @@ const GRADE: Record<EchoGrade | 'needsSex', L> = {
   below: label('Below range', '低於範圍'),
   needsSex: label('Sex needed', '需性別'),
 }
-const GEOMETRY: Record<LvGeometry | 'needsSex', L> = {
-  normal: label('Normal geometry', '正常'),
+// Only an abnormal geometry is named, at the head of the summary line.
+const GEOMETRY: Record<Exclude<LvGeometry, 'normal'>, L> = {
   concentricRemodeling: label('Concentric remodelling', '向心性重塑'),
   concentricHypertrophy: label('Concentric hypertrophy', '向心性肥厚'),
   eccentricHypertrophy: label('Eccentric hypertrophy', '離心性肥厚'),
-  needsSex: label('Sex needed', '需性別'),
 }
 
 // Display order, units and decimals; grading is always on the unrounded value.
