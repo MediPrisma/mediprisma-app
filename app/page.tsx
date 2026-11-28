@@ -27,6 +27,7 @@ import { useBackDismissibleLayer } from "@/src/shared/hooks/layout/use-back-dism
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
+import { useEmbedViewStore } from "@/src/application/stores/embed-view.store"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type UIEvent } from "react"
 import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
@@ -233,6 +234,14 @@ function PageContent() {
     setChosenCollapse((c) => (c === 'left' ? null : c))
   }, [recordSeq, setMobileView])
 
+  // The 精簡 mode of a framing page (stores/embed-view.store.ts): its own tabs
+  // and patient line stand in for the brand, the patient line and the
+  // 臨床摘要／功能 switch. It is told which panel is on screen.
+  const embedCompact = useEmbedViewStore((state) => state.compact)
+  const setEmbedPanel = useEmbedViewStore((state) => state.setPanel)
+  const setEmbedDetailOpen = useEmbedViewStore((state) => state.setDetailOpen)
+  useEffect(() => { setEmbedPanel(mobileView) }, [mobileView, setEmbedPanel])
+
   // Header collapse: tuck the title/toolbar away into a slim strip so the
   // panels get the full viewport height. In-session only (same hydration
   // reasoning as `collapsed`). The less-used header controls (匯入資料 /
@@ -267,6 +276,7 @@ function PageContent() {
   const deferredDetailClearFrameRef = useRef<number | null>(null)
   const deferredDetailClearTimerRef = useRef<number | null>(null)
   const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
+  useEffect(() => { setEmbedDetailOpen(detailVisible) }, [detailVisible, setEmbedDetailOpen])
 
   // A record detail (a trend, a visit) is drawn over the 功能 panel. When a
   // right-panel task is asked for (revealTab), it is underneath that detail,
@@ -621,7 +631,7 @@ function PageContent() {
       ) : (
       <header className="@container relative shrink-0 border-b border-border bg-card px-3 py-1.5 sm:px-4">
         <div className="flex min-w-0 items-center justify-between gap-2">
-          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+          <div className={embedCompact ? "hidden" : "flex min-w-0 shrink-0 items-center gap-2 sm:gap-3"}>
             <div className="flex h-8 w-8 items-center justify-center overflow-hidden max-[359px]:hidden">
               <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="App Icon" className="h-full w-full object-contain" />
             </div>
@@ -630,7 +640,7 @@ function PageContent() {
               <span className="max-lg:hidden @max-[80rem]:hidden"> · SMART on FHIR</span>
             </h1>
           </div>
-          <ClinicalPatientContext patient={patient} />
+          {embedCompact ? <div className="flex-1" /> : <ClinicalPatientContext patient={patient} />}
           {/* Header right cluster — kept lean (v0.4.0).
               Less-used controls (theme, version, feedback, connection
               info) live inside HeaderOverflowMenu (kebab); audience +
@@ -667,7 +677,7 @@ function PageContent() {
       </header>
       )}
 
-      <ClinicalPatientContext patient={patient} variant="mobile" />
+      {!embedCompact && <ClinicalPatientContext patient={patient} variant="mobile" />}
       
       {/* Email Verification Banner */}
       <div className="px-3 sm:px-6">
@@ -684,12 +694,14 @@ function PageContent() {
         </main>
       ) : (
       <>
-      <ClinicalMobilePanelSwitcher
-        activePanel={mobileView}
-        leftLabel={t.header.clinicalSummary}
-        rightLabel={t.header.features}
-        onChange={setMobileView}
-      />
+      {!embedCompact && (
+        <ClinicalMobilePanelSwitcher
+          activePanel={mobileView}
+          leftLabel={t.header.clinicalSummary}
+          rightLabel={t.header.features}
+          onChange={setMobileView}
+        />
+      )}
 
       <WorkspacePanelsProvider collapsed={collapsed} setCollapsed={setCollapsedByUser}>
       <ClinicalWorkspaceMain ref={containerRef}>

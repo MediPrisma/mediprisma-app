@@ -42,6 +42,7 @@ import {
 } from "@/src/shared/components/clinical-workspace"
 import { usePanelScrollMemory } from "./use-panel-scroll-memory"
 import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
+import { useEmbedViewStore } from "@/src/application/stores/embed-view.store"
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -283,6 +284,14 @@ function RightPanelContentInner() {
   const effectiveTab = features.some(f => f.id === activeTab)
     ? activeTab
     : features[0]?.id ?? activeTab
+
+  // The page framing this app is told which tab is open and which it has
+  // (stores/embed-view.store.ts): 安全 is there only where the check reaches.
+  const setEmbedRightTabs = useEmbedViewStore((s) => s.setRightTabs)
+  const listedFeatureIds = features.map((feature) => feature.id).join()
+  useEffect(() => {
+    setEmbedRightTabs(effectiveTab, listedFeatureIds.split(','))
+  }, [effectiveTab, listedFeatureIds, setEmbedRightTabs])
 
   const { hostRef: scrollMemoryHostRef, captureBeforeSwitch } = usePanelScrollMemory(effectiveTab)
   const changeTab = (next: string) => {

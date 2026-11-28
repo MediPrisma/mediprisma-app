@@ -1,22 +1,28 @@
 "use client"
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useImportBundle } from './useImportBundle'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
+import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { useEmbedViewStore } from '@/src/application/stores/embed-view.store'
 import {
   EMBED_READY,
+  EMBED_SAFETY_TAB,
   EMBED_SOURCE_APP,
   EMBED_VERSION,
   importedReply,
   isAllowedEmbedParent,
   isEmbedImportMessage,
+  isEmbedLeftView,
   isEmbedLendSignInMessage,
   isEmbedNavigateMessage,
   isEmbedSignInMessage,
   isEmbedView,
   lentSignInReply,
   navigatedReply,
+  shownMessage,
+  shownView,
   signedInReply,
 } from '../services/embedded-import'
 
@@ -26,13 +32,17 @@ import {
  * when it asks for that instead, and takes a Bundle from an allowlisted parent page
  * (services/embedded-import.ts), imports it through the same path as the
  * import button, and answers with the Patient ids now loaded. Shows the view
- * the parent asks for (the record, or 自訂摘要). Does nothing when the app is
- * not framed.
+ * the parent asks for (the record or one of its tabs, 標準摘要 or 自訂摘要), in
+ * the 精簡 mode when it asks for that, and tells it which patient and view are
+ * shown whenever either changes. Does nothing when the app is not framed.
  */
 export function useEmbeddedImport() {
   const { importFile, loadedPatientIds } = useImportBundle()
   const { signInAsEmbeddingAccount, lendSignIn } = useAuth()
-  const { revealTab, revealRecord } = useRightPanel()
+  const { revealTab, revealRecord, summaryView } = useRightPanel()
+  // The allowlisted parent that handed a record or asked for a view: the only
+  // place the frame reports what it shows. Unset, it reports nothing.
+  const [parentOrigin, setParentOrigin] = useState<string | null>(null)
   const importRef = useRef({ importFile, loadedPatientIds, signInAsEmbeddingAccount, lendSignIn, revealTab, revealRecord })
   useEffect(() => {
     importRef.current = { importFile, loadedPatientIds, signInAsEmbeddingAccount, lendSignIn, revealTab, revealRecord }
@@ -64,9 +74,32 @@ export function useEmbeddedImport() {
           window.parent.postMessage(navigatedReply(data.requestId, { ok: false, error: `沒有「${view.slice(0, 40)}」這個畫面` }), event.origin)
           return
         }
-        if (view === 'custom-summary') importRef.current.revealTab('medical-summary', { summaryView: 'custom' })
-        else importRef.current.revealRecord()
-        window.parent.postMessage(navigatedReply(data.requestId, { ok: true, view }), event.origin)
+        const embed = useEmbedViewStore.getState()
+        // A tab this patient does not have (上次門診 without a hospital visit).
+        // Before the record panel is drawn nothing is listed yet; the panel
+        // opens the asked tab when it mounts, if it has it.
+        const listed = embed.listedLeftTabs
+        const missing = isEmbedLeftView(view)
+          ? (listed.length > 0 ? !listed.includes(view) : view === 'last-outpatient')
+          : view === 'safety' && !embed.listedRightTabs.includes(EMBED_SAFETY_TAB)
+        if (missing) {
+          window.parent.postMessage(navigatedReply(data.requestId, { ok: false, error: `這位病人沒有「${view}」這個畫面` }), event.origin)
+          return
+        }
+        // Only a request that is carried out changes the mode: one answered as
+        // not shown leaves the frame exactly as it was.
+        if (data.compact !== undefined) embed.setCompact(data.compact)
+        if (view === 'safety') {
+          importRef.current.revealTab(EMBED_SAFETY_TAB)
+        } else if (view === 'custom-summary' || view === 'standard-summary') {
+          importRef.current.revealTab('medical-summary', { summaryView: view === 'custom-summary' ? 'custom' : 'standard' })
+        } else {
+          if (isEmbedLeftView(view)) embed.requestLeftTab(view)
+          importRef.current.revealRecord()
+        }
+        setParentOrigin(event.origin)
+        const patientIds = await importRef.current.loadedPatientIds().catch(() => [])
+        window.parent.postMessage(navigatedReply(data.requestId, { ok: true, view, compact: useEmbedViewStore.getState().compact, patientIds }), event.origin)
         return
       }
       if (!isEmbedImportMessage(data)) return
@@ -75,6 +108,7 @@ export function useEmbeddedImport() {
         const file = new File([data.bundle], data.filename || 'assistant-record.json', { type: 'application/fhir+json' })
         await importRef.current.importFile(file)
         const patientIds = await importRef.current.loadedPatientIds()
+        setParentOrigin(event.origin)
         answer(importedReply(data.requestId, { ok: true, patientIds }))
       } catch (error) {
         answer(importedReply(data.requestId, { ok: false, error: error instanceof Error ? error.message : '匯入失敗' }))
@@ -85,6 +119,30 @@ export function useEmbeddedImport() {
     window.parent.postMessage({ source: EMBED_SOURCE_APP, type: EMBED_READY, version: EMBED_VERSION }, '*')
     return () => window.removeEventListener('message', receive)
   }, [])
+
+  useReportShown(parentOrigin, summaryView, loadedPatientIds)
+}
+
+/**
+ * Tells the parent which patient and which view the frame shows, each time
+ * either changes, so it can check both against its own tab and patient.
+ */
+function useReportShown(parentOrigin: string | null, summaryView: 'standard' | 'custom', loadedPatientIds: () => Promise<string[]>) {
+  const panel = useEmbedViewStore((state) => state.panel)
+  const rightTab = useEmbedViewStore((state) => state.rightTab)
+  const detailOpen = useEmbedViewStore((state) => state.detailOpen)
+  const leftTab = useEmbedViewStore((state) => state.leftTab)
+  const { patient } = usePatient()
+  const view = shownView({ panel, leftTab, rightTab, summaryView, detailOpen })
+  const patientKey = patient?.id ?? null
+  useEffect(() => {
+    if (!parentOrigin || typeof window === 'undefined' || window.parent === window) return
+    let cancelled = false
+    void loadedPatientIds().catch(() => []).then((patientIds) => {
+      if (!cancelled) window.parent.postMessage(shownMessage(view, patientIds), parentOrigin)
+    })
+    return () => { cancelled = true }
+  }, [parentOrigin, view, patientKey, loadedPatientIds])
 }
 
 /** Mounts the embedded import once for the whole app; renders nothing. */
