@@ -1,0 +1,93 @@
+import type { ReportOrgan } from '@/src/core/entities/medical-summary.entity'
+import type { ObservationEntity } from '@/src/core/entities/clinical-data.entity'
+import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { getOriginalAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
+import { negatedAround, verifyReportQuote } from '@/src/core/utils/report-quote.utils'
+
+/** Separate from report-digest's last-addendum policy: numbered pathology
+ * specimens are independent. This helper never changes excerpts/prompts. */
+export function pathologySpecimenDescriptors(narrative: string, quotes: readonly string[]): string[] {
+  const headers = [...narrative.matchAll(/^[ \t]*(?:(?:(?:patholog(?:ic|ical)|final)[ \t]+)?diagnos[ie]s|(?:病理|最終)?診斷)(?:[ \t]*\d{1,3})?[ \t]*[:：][ \t]*/gim)]
+  return headers.flatMap((header, index) => {
+    const start = header.index! + header[0].length
+    const end = headers[index + 1]?.index ?? narrative.length
+    const lines = narrative.slice(start, end).split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+    const descriptor = lines[0] ?? ''
+    const diagnosis = lines[1] ?? ''
+    // A specimen descriptor has an organ/site/procedure list or label shape,
+    // not just a preceding disease name in a multiline list of diagnoses.
+    return descriptor.length <= 200 && /[,，]|[:：]$/.test(descriptor) &&
+      !/[.!?。;；]/.test(descriptor) && !/^\d+[.)]/.test(descriptor) &&
+      quotes.some(quote => verifyReportQuote(quote, diagnosis)) ? [descriptor] : []
+  })
+}
+
+// Narrow biochemical identities, not diagnostic thresholds. Unknown tests
+// receive no opinion; broad syndromes (such as anemia) have many valid tests.
+const LAB_CLAIMS: ReadonlyArray<{ claim: RegExp; keys: readonly string[]; fallback: RegExp }> = [
+  { claim: /hyperuric|高尿酸/i, keys: ['UA'], fallback: /uric|urate|尿酸/i },
+  { claim: /hypokal|hyperkal|[高低]血鉀/i, keys: ['K'], fallback: /potassium|鉀/i },
+  { claim: /hyponatr|hypernatr|[高低]血鈉/i, keys: ['NA'], fallback: /sodium|鈉/i },
+  { claim: /hypercalc|hypocalc|[高低]血鈣/i, keys: ['CA', 'ICA'], fallback: /calcium|鈣|^iCa$/i },
+  { claim: /hyperglyc|hypoglyc|[高低]血糖/i, keys: ['GLUCOSE', 'GLUCOSE-AC', 'GLUCOSE-FS', 'HBA1C'], fallback: /glucose|Glu-(?:AC|PC)|血糖|糖化血色素/i },
+]
+
+export function labClaimConflicts(label: string, observations: readonly ObservationEntity[]): boolean {
+  const rule = LAB_CLAIMS.find(rule => rule.claim.test(label))
+  if (!rule || !observations.length) return false
+  const tests = observations.map(obs => ({ key: getAnalyteCanonicalKey(obs), name: getOriginalAnalyteDisplayForObs(obs) }))
+  if (tests.some(test => test.key ? rule.keys.includes(test.key) : rule.fallback.test(test.name))) return false
+  return tests.every(test => Boolean(test.key))
+}
+
+// Use the verified finding's anatomy, never patient sex, modality or the
+// clinical history. Fallback receives only the quote's adjacent pathology specimen descriptor. Ambiguity stays
+// in Other; no keyword decides a diagnosis or removes a finding.
+const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
+  ['brain', /\b(?:brain|cerebr\w*|cerebell\w*|basal gangli\w*)\b|(?<!電)腦/iu],
+  ['head-neck', /\b(?:thyroid|pharyn\w*|laryn\w*|parotid|maxillary sinus|paranasal sinus\w*)\b|甲狀腺|咽|喉|腮腺|鼻竇/iu],
+  ['chest-lung', /\b(?:lungs?|mediastin\w*|pleur\w*|bronch\w*|atelectasis)\b|肺|胸膜/iu],
+  ['heart', /\b(?:heart|cardiac|coronary|(?:left|right) ventric\w*|cardiomegaly|mitral|tricuspid|pericardi\w*)\b|心臟|心室|二尖瓣|三尖瓣|冠狀動脈/iu],
+  ['breast', /\b(?:breast|mammary)\b|乳房|乳腺/iu],
+  ['abdomen-liver-biliary', /\b(?:liver|hepatic(?!\s+flexure)|gall[\s-]?bladder|biliary|bile duct)\b|肝|膽囊|膽管/iu],
+  ['abdomen-other', /\b(?:stomach|gastric|bowel|colon|pancrea\w*|spleen|splenic|hiatal)\b|胃|腸|胰|脾/iu],
+  ['kidney-urinary', /\b(?:kidney|renal|ureter\w*|(?<!gall[\s-]?)bladder)\b|腎(?!上腺)|輸尿管|膀胱/iu],
+  ['gynecologic', /\b(?:uter\w*|endometr\w*|ovary|ovarian|adnexa\w*|vagina\w*)\b|子宮|卵巢|陰道/iu],
+  ['prostate', /\bprostat\w*\b|攝護腺|前列腺/iu],
+  ['musculoskeletal', /\b(?:bone|femur|femoral|tibia\w*|humer\w*|vertebr\w*|spine|spinal|spondylosis|knee|hip|joint|osteoarthr\w*)\b|股骨|肱骨|脛骨|脊椎|骨折|骨骼|關節/iu],
+  ['vascular', /\b(?:aorta|artery|arteries|veins?)\b|動脈(?!期)|靜脈(?!期)/iu],
+  ['hematologic-lymph', /\b(?:lymph(?:\s+nodes?|adenopathy|oma)s?|marrow)\b|淋巴結|骨髓/iu],
+]
+
+// "No pleural effusion or lung lesion." names organs the finding is not in.
+// Uses the same clause-scoped negation as quote verification.
+function organMentions(quotes: readonly string[]): { affirmed: Set<ReportOrgan>; negated: Set<ReportOrgan> } {
+  const affirmed = new Set<ReportOrgan>()
+  const negated = new Set<ReportOrgan>()
+  for (const [organ, pattern] of ANATOMY) {
+    const global = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+    for (const quote of quotes) {
+      for (const match of quote.matchAll(global)) {
+        const start = match.index ?? 0
+        if (negatedAround(quote, start, start + match[0].length)) negated.add(organ)
+        else affirmed.add(organ)
+      }
+    }
+  }
+  return { affirmed, negated }
+}
+
+export function reportOrganFromQuotes(proposed: ReportOrgan, quotes: readonly string[], sourceNarratives: readonly string[] = []): ReportOrgan {
+  const { affirmed: matches, negated } = organMentions(quotes)
+  // Only negated anatomy: no evidence either way, so the model's grouping stays.
+  if (matches.size === 0 && negated.size > 0) return proposed
+  if (matches.size === 1) return [...matches][0]
+  if (matches.size > 1 && !matches.has(proposed)) return 'other'
+  // A short verified quote (e.g. "Fracture") need not repeat the specimen.
+  // A single-organ source can disambiguate it; a multi-organ report cannot.
+  if (matches.size === 0) {
+    const sourceMatches = new Set(ANATOMY.filter(([, pattern]) => sourceNarratives.some(text => pattern.test(text))).map(([organ]) => organ))
+    if (sourceMatches.size === 1) return [...sourceMatches][0]
+  }
+  return proposed
+}
