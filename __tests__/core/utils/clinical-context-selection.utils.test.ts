@@ -78,6 +78,9 @@ describe('a malformed newest date does not break context building', () => {
   const { filterEncounterRecords, selectMedicationRecords } = jest.requireActual(
     '@/src/core/utils/clinical-context-selection.utils',
   ) as typeof import('@/src/core/utils/clinical-context-selection.utils')
+  // The '3m' window is measured from the real clock: pin it to NOW, or these dates age out of it.
+  beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(NOW) })
+  afterEach(() => jest.useRealTimers())
 
   it('keeps the encounter floor working from the newest well-formed date', () => {
     const encounters = [

@@ -13,6 +13,9 @@ describe('filterMedicationRecords latest-known floor', () => {
   const now = Date.parse('2026-06-15')
   const filters: any = { medicationStatus: 'active', medicationChronic: 'all', medicationTimeRange: '6m' }
   const data = { encounters: [{ period: { start: '2026-06-15' } }] }
+  // The '6m' window is measured from the real clock: pin it to `now`, or these dates age out of it.
+  beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(now) })
+  afterEach(() => jest.useRealTimers())
 
   it('adds recently dispensed lapsed medicines when nothing is current', () => {
     const meds = [
